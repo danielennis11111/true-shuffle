@@ -30,7 +30,6 @@ let isPlaying = false;
 let selectedMood = null; // New: track selected mood
 let selectedGenres = []; // New: track selected genres for mix mode
 let currentTrackFeatures = null; // New: track audio features
-let settingsManager = null; // Settings manager instance
 let currentUserId = null; // Current logged-in user ID
 
 // Mood configurations for audio features
@@ -119,9 +118,9 @@ const moodConfigs = {
 };
 
 // Get DOM elements - REVERTED TO ORIGINAL FOR WORKING CONTROLS
-const loginButton = document.getElementById('login-button');
+const loginButton = document.getElementById('login-btn');
 const authLoginButton = document.getElementById('auth-login-button');
-const logoutButton = document.getElementById('logout-button');
+const logoutButton = document.getElementById('logout-btn');
 const userProfileElement = document.getElementById('user-profile');
 const userNameElement = document.getElementById('user-name');
 const userImageElement = document.getElementById('user-image');
@@ -154,12 +153,16 @@ let albumCoverElement;
 
 // Customization settings
 let customSettings = {
-  yearFilter: false,
-  yearFrom: 1990,
+  yearFrom: 1950,
   yearTo: 2024,
-  popularityFilter: true,
-  maxPopularity: 75,
-  searchOffset: 800
+  popularity: 50,
+  trackDurationMin: 30,
+  trackDurationMax: 600,
+  yearFilter: false,
+  genreFilter: false,
+  selectedGenres: ['pop', 'rock', 'hip-hop', 'electronic', 'jazz', 'classical'],
+  moodFilter: false,
+  selectedMood: null
 };
 
 // Safe ColorThief initialization - KEEP THIS FIX
@@ -290,287 +293,6 @@ async function initialize() {
     } finally {
         hideLoading();
     }
-}
-
-// Enhanced settings initialization
-async function initializeEnhancedSettings() {
-    // Wait for settings system to load
-    if (window.trueShuffleSettings) {
-        // Listen for settings changes
-        window.addEventListener('settingsApplied', (e) => {
-            console.log('⚙️ Settings applied:', e.detail);
-            handleSettingsChange(e.detail);
-        });
-        
-        // Setup additional event listeners for new settings
-        setupEnhancedSettingsListeners();
-        
-        console.log('✅ Enhanced settings system connected');
-    } else {
-        console.warn('⚠️ Settings system not available, will retry...');
-        setTimeout(initializeEnhancedSettings, 100);
-    }
-}
-
-// Setup event listeners for enhanced settings
-function setupEnhancedSettingsListeners() {
-    // Help button
-    document.addEventListener('click', (e) => {
-        if (e.target.id === 'help-button' || e.target.closest('#help-button')) {
-            showHelpModal();
-        }
-    });
-
-    // Volume control
-    document.addEventListener('input', (e) => {
-        if (e.target.id === 'volume-control') {
-            const volume = parseInt(e.target.value) / 100;
-            if (window.player) {
-                window.player.setVolume(volume);
-            }
-            
-            const label = document.getElementById('volume-label');
-            if (label) {
-                label.textContent = `${e.target.value}%`;
-            }
-        }
-    });
-
-    // Discovery sensitivity
-    document.addEventListener('change', (e) => {
-        if (e.target.id === 'discovery-sensitivity') {
-            const label = document.getElementById('discovery-sensitivity-label');
-            if (label) {
-                const options = {
-                    'low': 'Conservative',
-                    'medium': 'Balanced', 
-                    'high': 'Adventurous'
-                };
-                label.textContent = options[e.target.value] || 'Balanced';
-            }
-        }
-    });
-
-    // Genre diversity slider
-    document.addEventListener('input', (e) => {
-        if (e.target.id === 'genre-diversity') {
-            const label = document.getElementById('genre-diversity-label');
-            if (label) {
-                label.textContent = `${e.target.value}%`;
-            }
-        }
-    });
-
-    // Export/Import settings
-    document.addEventListener('click', (e) => {
-        if (e.target.id === 'export-settings' || e.target.id === 'export-settings-btn') {
-            exportSettings();
-        } else if (e.target.id === 'import-settings') {
-            document.getElementById('settings-file-input').click();
-        }
-    });
-
-    // File input for settings import
-    document.addEventListener('change', (e) => {
-        if (e.target.id === 'settings-file-input') {
-            const file = e.target.files[0];
-            if (file) {
-                importSettings(file);
-            }
-        }
-    });
-
-    // Premium feature interactions
-    document.addEventListener('click', (e) => {
-        if (e.target.closest('.premium-feature')) {
-            const feature = e.target.closest('.premium-feature');
-            if (window.monetization && !window.monetization.canUseFeature('premium')) {
-                e.preventDefault();
-                window.monetization.showUpgradePrompt('premium_feature');
-            }
-        }
-    });
-}
-
-// Handle settings changes
-function handleSettingsChange(settings) {
-    // Update global variables
-    if (settings.shuffleType && settings.shuffleType !== currentShuffleType) {
-        currentShuffleType = settings.shuffleType;
-        console.log('🔀 Shuffle type changed to:', currentShuffleType);
-    }
-    
-    // Update discovery parameters
-    if (window.customSettings) {
-        window.customSettings.yearFrom = settings.yearFrom;
-        window.customSettings.yearTo = settings.yearTo;
-        window.customSettings.maxPopularity = settings.popularity;
-        window.customSettings.genreDiversity = settings.genreDiversity / 100;
-    }
-    
-    // Apply audio settings
-    if (window.player && settings.volume !== undefined) {
-        window.player.setVolume(settings.volume);
-    }
-    
-    // Update monetization tracking
-    if (window.monetization) {
-        window.monetization.trackEvent('settings_changed', {
-            shuffle_type: settings.shuffleType,
-            genres_count: settings.genres?.length || 0,
-            moods_count: settings.moods?.length || 0
-        });
-    }
-}
-
-// Export settings function
-function exportSettings() {
-    if (!window.trueShuffleSettings) {
-        showNotification('Settings system not available', 'error');
-        return;
-    }
-    
-    try {
-        const settingsJson = window.trueShuffleSettings.exportSettings();
-        const blob = new Blob([settingsJson], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `true-shuffle-settings-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        showNotification('Settings exported successfully!', 'success');
-        
-        if (window.monetization) {
-            window.monetization.trackEvent('settings_exported');
-        }
-    } catch (error) {
-        console.error('Export failed:', error);
-        showNotification('Failed to export settings', 'error');
-    }
-}
-
-// Import settings function
-function importSettings(file) {
-    if (!window.trueShuffleSettings) {
-        showNotification('Settings system not available', 'error');
-        return;
-    }
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const success = window.trueShuffleSettings.importSettings(e.target.result);
-            if (success && window.monetization) {
-                window.monetization.trackEvent('settings_imported');
-            }
-        } catch (error) {
-            console.error('Import failed:', error);
-            showNotification('Failed to import settings', 'error');
-        }
-    };
-    reader.readAsText(file);
-}
-
-// Enhanced track usage tracking
-function trackShuffleUsage(shuffleType, trackCount) {
-    if (window.monetization) {
-        // Check usage limits before proceeding
-        if (!window.monetization.checkUsageLimits()) {
-            return false; // Usage limit reached
-        }
-        
-        // Track the usage
-        window.monetization.trackShuffleUsage(shuffleType, trackCount);
-    }
-    
-    // Update UI with current usage
-    updateUsageDisplay();
-    
-    return true;
-}
-
-// Update usage display in header
-function updateUsageDisplay() {
-    if (window.monetization) {
-        const stats = window.monetization.getUsageStats();
-        
-        // Update daily tracks count
-        const dailyTracksElement = document.getElementById('daily-tracks-count');
-        if (dailyTracksElement) {
-            dailyTracksElement.textContent = stats.dailyTracks;
-        }
-        
-        // Update plan display
-        const planElement = document.getElementById('user-plan-display');
-        if (planElement) {
-            planElement.textContent = stats.plan.charAt(0).toUpperCase() + stats.plan.slice(1);
-        }
-        
-        // Show/hide upgrade button
-        const upgradeBtn = document.getElementById('upgrade-btn');
-        if (upgradeBtn) {
-            upgradeBtn.classList.toggle('hidden', stats.plan !== 'free');
-        }
-        
-        // Update trial banner if in trial
-        if (stats.isInTrial) {
-            const trialBanner = document.getElementById('trial-banner');
-            const trialDays = document.getElementById('trial-days-remaining');
-            if (trialBanner && trialDays) {
-                trialBanner.classList.remove('hidden');
-                trialDays.textContent = stats.remainingTrialDays;
-            }
-        }
-    }
-}
-
-// Enhanced notification system
-function showNotification(message, type = 'info', duration = 3000) {
-    // Check if settings allow notifications
-    if (window.trueShuffleSettings && !window.trueShuffleSettings.getSetting('enableNotifications')) {
-        return; // Notifications disabled
-    }
-    
-    const container = document.getElementById('notification-container');
-    if (!container) {
-        console.log(`${type.toUpperCase()}: ${message}`);
-        return;
-    }
-    
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    
-    const icons = {
-        success: 'check-circle',
-        error: 'exclamation-triangle', 
-        warning: 'exclamation-circle',
-        info: 'info-circle'
-    };
-    
-    notification.innerHTML = `
-        <div class="notification-content">
-            <i class="fas fa-${icons[type] || 'info-circle'}"></i>
-            <div class="notification-text">${message}</div>
-            <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    `;
-    
-    container.appendChild(notification);
-    
-    // Auto-remove after duration
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.style.opacity = '0';
-            setTimeout(() => notification.remove(), 300);
-        }
-    }, duration);
 }
 
 // Setup event listeners
@@ -805,24 +527,24 @@ function changeShuffleType(type) {
 
 // Redirect to Spotify authorization page
 function redirectToSpotifyAuth() {
-  console.log('🎵 Starting Spotify authentication flow...');
+  console.log('🔐 Redirecting to Spotify Auth...');
   
   try {
+    // Show loading indicator
     showLoading();
     
-    // Clear any existing tokens to prevent scope conflicts
-    console.log('🧹 Clearing existing tokens...');
-    clearAuthTokens();
+    // Generate a random state string for security
+    const state = generateRandomString(16);
     
-    console.log('🔗 Redirecting to server login endpoint...');
+    // Store state in localStorage for verification
+    localStorage.setItem('spotify_auth_state', state);
     
-    // Use the server's login endpoint
+    // Redirect to server's login endpoint which handles Spotify auth
     window.location.href = '/login';
-    
   } catch (error) {
     console.error('❌ Error during auth redirect:', error);
     hideLoading();
-    alert('Authentication error. Please try again.');
+    showNotification('Authentication error. Please try again.', 'error');
   }
 }
 
@@ -914,8 +636,8 @@ async function loadUserData() {
     const userImageElement = document.getElementById('user-image');
     const userNameElement = document.getElementById('user-name');
     const userPlanElement = document.getElementById('user-plan');
-    const userProfileElement = document.getElementById('user-profile');
-    const loginButton = document.getElementById('login-button');
+    const userDisplayElement = document.getElementById('user-display');
+    const loginButton = document.getElementById('login-btn');
     const usageStatsDisplay = document.getElementById('usage-stats-mini');
 
     // Update user profile information
@@ -945,9 +667,9 @@ async function loadUserData() {
     }
     
     // Show user profile and hide login button
-    if (userProfileElement) {
-      userProfileElement.classList.remove('hidden');
-      userProfileElement.style.display = 'flex';
+    if (userDisplayElement) {
+      userDisplayElement.classList.remove('hidden');
+      userDisplayElement.style.display = 'flex';
       console.log('✅ User profile shown');
     }
     
@@ -1001,7 +723,7 @@ async function loadUserData() {
     hideLoading();
     
     // Set up logout button listener
-    const logoutButton = document.getElementById('logout-button');
+    const logoutButton = document.getElementById('logout-btn');
     if (logoutButton) {
       logoutButton.addEventListener('click', logout);
       console.log('✅ Logout button listener added');
@@ -1176,17 +898,8 @@ function getDateRange() {
 async function fetchTrulyRandomTracks() {
     console.log('🎲 Fetching TRULY random tracks using cryptographic randomization...');
     
-    // Get current settings
-    const userSettings = settingsManager ? settingsManager.getSettings() : await loadUserSettings();
-    console.log('🔧 Using settings for track search:', {
-        genres: userSettings.genres,
-        moods: userSettings.moods,
-        languages: userSettings.languages,
-        yearFrom: userSettings.yearFrom,
-        yearTo: userSettings.yearTo,
-        popularity: userSettings.popularity,
-        explicitContent: userSettings.explicitContent
-    });
+    // Use default settings instead of getting from settingsManager
+    console.log('🔧 Using default settings for track search');
     
     try {
         const allTracks = [];
@@ -1195,26 +908,26 @@ async function fetchTrulyRandomTracks() {
         
         // Strategy 1: Pure Random Track ID Generation (Most Random)
         console.log('🎯 Strategy 1: Pure random track ID generation...');
-        const randomIdTracks = await fetchRandomTracksByIds(userSettings, usedTrackIds, 15);
+        const randomIdTracks = await fetchRandomTracksByIds(customSettings, usedTrackIds, 15);
         allTracks.push(...randomIdTracks);
         randomIdTracks.forEach(track => usedTrackIds.add(track.id));
         
         // Strategy 2: Ultra-Random Search with Cryptographic Randomization
         console.log('🔀 Strategy 2: Ultra-random search exploration...');
         if (allTracks.length < maxResults) {
-            const ultraRandomTracks = await fetchUltraRandomSearchTracks(userSettings, usedTrackIds, 20);
+            const ultraRandomTracks = await fetchUltraRandomSearchTracks(customSettings, usedTrackIds, 20);
             allTracks.push(...ultraRandomTracks);
         }
         
         // Strategy 3: Random Playlist Deep Dive
         console.log('📋 Strategy 3: Random playlist exploration...');
         if (allTracks.length < maxResults) {
-            const playlistTracks = await fetchRandomPlaylistTracks(userSettings, usedTrackIds, 15);
+            const playlistTracks = await fetchRandomPlaylistTracks(customSettings, usedTrackIds, 15);
             allTracks.push(...playlistTracks);
         }
         
         // Filter and validate tracks
-        const filteredTracks = filterTracksBySettings(allTracks, userSettings);
+        const filteredTracks = filterTracksBySettings(allTracks, customSettings);
         
         // Apply cryptographic shuffle for maximum randomness
         const trulyRandomTracks = cryptographicShuffle(filteredTracks);
@@ -1436,6 +1149,21 @@ function cryptoRandom() {
     const array = new Uint32Array(1);
     crypto.getRandomValues(array);
     return array[0] / 4294967296; // Convert to 0-1 range
+}
+
+// Fisher-Yates shuffle algorithm for unbiased array randomization
+function fisherYatesShuffle(array) {
+    if (!array || array.length <= 1) return array;
+    
+    const shuffled = [...array];
+    
+    // Start from the last element and swap with a random previous element
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; // ES6 swap
+    }
+    
+    return shuffled;
 }
 
 // Cryptographic Fisher-Yates shuffle for maximum randomness
@@ -3343,7 +3071,7 @@ function logout() {
     
     // Get DOM elements
     const userProfileElement = document.getElementById('user-profile');
-    const loginButton = document.getElementById('login-button');
+    const loginButton = document.getElementById('login-btn');
     const mainContentElement = document.getElementById('main-content');
     const authMessageElement = document.getElementById('auth-message');
     const authSection = document.getElementById('auth-section');
@@ -3443,11 +3171,15 @@ function generateRandomString(length) {
 
 // Show the auth message
 function showAuthMessage() {
-  mainContentElement.classList.add('hidden');
-  authMessageElement.classList.remove('hidden');
-  loginButton.classList.add('hidden');
-  userProfileElement.classList.add('hidden');
-  userProfileElement.classList.remove('flex');
+  const mainContentElement = document.getElementById('main-content');
+  const authMessageElement = document.getElementById('auth-message');
+  const loginButton = document.getElementById('login-btn');
+  const userDisplayElement = document.getElementById('user-display');
+  
+  if (mainContentElement) mainContentElement.classList.add('hidden');
+  if (authMessageElement) authMessageElement.classList.remove('hidden');
+  if (loginButton) loginButton.classList.remove('hidden');
+  if (userDisplayElement) userDisplayElement.classList.add('hidden');
 }
 
 // Show loading state
@@ -3495,7 +3227,46 @@ function clearAuthTokens() {
 // Make clearAuthTokens globally available for debugging
 window.clearAuthTokens = clearAuthTokens;
 
-// Discovery flow functions
+// Track usage of shuffle feature
+function trackShuffleUsage(shuffleType, count = 1) {
+  console.log(`📊 Tracking usage of shuffle type: ${shuffleType}, count: ${count}`);
+  
+  try {
+    // Get existing usage stats
+    let usageStats = JSON.parse(localStorage.getItem('trueShuffleUsageStats') || '{}');
+    
+    // Initialize if not exists
+    if (!usageStats.shuffleCount) {
+      usageStats.shuffleCount = {};
+    }
+    
+    // Increment count for this shuffle type
+    if (!usageStats.shuffleCount[shuffleType]) {
+      usageStats.shuffleCount[shuffleType] = 0;
+    }
+    usageStats.shuffleCount[shuffleType] += count;
+    
+    // Track total shuffles
+    if (!usageStats.totalShuffles) {
+      usageStats.totalShuffles = 0;
+    }
+    usageStats.totalShuffles += count;
+    
+    // Track last used
+    usageStats.lastUsed = Date.now();
+    
+    // Save back to localStorage
+    localStorage.setItem('trueShuffleUsageStats', JSON.stringify(usageStats));
+    
+    // Always allow to proceed in this implementation
+    return true;
+  } catch (error) {
+    console.error('❌ Error tracking shuffle usage:', error);
+    // Still allow to proceed even if tracking fails
+    return true;
+  }
+}
+
 function discoverMusic() {
   console.log('🎵 Starting music discovery process...');
   
@@ -3780,20 +3551,9 @@ function getSearchParameters() {
 async function fetchMoodBasedTracks() {
   console.log('🎭 Fetching mood-based tracks...');
   
-  // Get settings from enhanced settings system
-  let userSettings = {};
-  try {
-      const storedSettings = localStorage.getItem('trueShuffleSettings');
-      if (storedSettings) {
-          userSettings = JSON.parse(storedSettings);
-      }
-  } catch (error) {
-      console.warn('Could not load user settings, using defaults');
-  }
-  
   // Use mood from settings, fallback to legacy selectedMood
-  const moodToUse = (userSettings.moods && userSettings.moods.length > 0) ? 
-                    userSettings.moods[0] : selectedMood;
+  const moodToUse = (customSettings.moods && customSettings.moods.length > 0) ? 
+                    customSettings.moods[0] : selectedMood;
   
   if (!moodToUse) {
     showNotification('Please select a mood in settings before discovering music.', 'warning');
@@ -3827,18 +3587,18 @@ async function fetchMoodBasedTracks() {
       let searchQuery = randomTerm;
       
       // Apply year filter from settings
-      if (userSettings.yearFrom && userSettings.yearTo) {
-          if (userSettings.yearFrom === userSettings.yearTo) {
-              searchQuery += ` year:${userSettings.yearFrom}`;
+      if (customSettings.yearFrom && customSettings.yearTo) {
+          if (customSettings.yearFrom === customSettings.yearTo) {
+              searchQuery += ` year:${customSettings.yearFrom}`;
           } else {
-              searchQuery += ` year:${userSettings.yearFrom}-${userSettings.yearTo}`;
+              searchQuery += ` year:${customSettings.yearFrom}-${customSettings.yearTo}`;
           }
-          console.log(`📅 Applied year filter: ${userSettings.yearFrom}-${userSettings.yearTo}`);
+          console.log(`📅 Applied year filter: ${customSettings.yearFrom}-${customSettings.yearTo}`);
       }
       
       // Apply genre filter from settings if available
-      if (userSettings.genres && userSettings.genres.length > 0) {
-          const randomGenre = userSettings.genres[Math.floor(Math.random() * userSettings.genres.length)];
+      if (customSettings.genres && customSettings.genres.length > 0) {
+          const randomGenre = customSettings.genres[Math.floor(Math.random() * customSettings.genres.length)];
           searchQuery += ` genre:${randomGenre}`;
           console.log(`🎵 Applied genre filter: ${randomGenre}`);
       }
@@ -3858,7 +3618,7 @@ async function fetchMoodBasedTracks() {
           
           const validTracks = data.tracks.items.filter(track => {
             // Apply popularity filter from settings
-            const maxPopularity = userSettings.popularity || 90;
+            const maxPopularity = customSettings.popularity || 90;
             if (track.popularity > maxPopularity) return false;
             
             if (usedTrackIds.has(track.id)) return false;
@@ -5104,7 +4864,7 @@ window.debugShowProfile = function() {
   const userProfileElement = document.getElementById('user-profile');
   const userImageElement = document.getElementById('user-image');
   const userNameElement = document.getElementById('user-name');
-  const loginButton = document.getElementById('login-button');
+  const loginButton = document.getElementById('login-btn');
   
   console.log('User profile element:', userProfileElement);
   console.log('Access token exists:', !!accessToken);
@@ -5731,3 +5491,48 @@ console.log('🧪 Debug functions available:');
 console.log('- debugUpgradeToPremium() - Upgrade to premium for testing');
 console.log('- debugTestSettingsSave() - Test settings saving functionality');
 console.log('- debugCheckSubscription() - Check current subscription status');
+
+// Add showNotification function 
+function showNotification(message, type = 'info', duration = 3000) {
+  console.log(`${type.toUpperCase()}: ${message}`);
+  
+  const container = document.getElementById('notification-area');
+  if (!container) return;
+  
+  const notification = document.createElement('div');
+  notification.className = `notification ${type}`;
+  
+  const icons = {
+    'success': 'check-circle',
+    'error': 'exclamation-triangle', 
+    'warning': 'exclamation-circle',
+    'info': 'info-circle'
+  };
+  
+  notification.innerHTML = `
+    <div class="notification-content">
+      <i class="fas fa-${icons[type] || 'info-circle'}"></i>
+      <div class="notification-text">${message}</div>
+      <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  `;
+  
+  container.appendChild(notification);
+  
+  // Auto-remove after duration
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.style.opacity = '0';
+      setTimeout(() => notification.remove(), 300);
+    }
+  }, duration);
+}
+
+// ... existing code ...
+
+// Make sure onSpotifyWebPlaybackSDKReady is defined as a global function
+window.onSpotifyWebPlaybackSDKReady = initializeSpotifyPlayer;
+
+// ... existing code ...

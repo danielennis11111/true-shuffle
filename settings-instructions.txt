@@ -1,0 +1,10 @@
+1. shuffle style selection
+2. Year Range
+3. Moods multi selection
+4. Genre multi selection
+5. popularity of song slider 
+6. In my library vs not in my library shuffle mix settings
+
+Make sure these 6 settings can be functional and actually saved. These are the only settings users can change at the moment
+
+remove all extra toggles for the settings toggles but still keep the functionality of the background change and playlist adding after 5 seconds and liking. 
