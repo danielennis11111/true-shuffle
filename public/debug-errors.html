@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>True Shuffle - Debug Console Errors</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .debug-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .error-log {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .error-item {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 4px solid #ff4444;
+            background: #330000;
+        }
+        .warning-item {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 4px solid #ffaa00;
+            background: #332200;
+        }
+        .info-item {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 4px solid #0088ff;
+            background: #001133;
+        }
+        .test-section {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .test-btn {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-btn:hover {
+            background: #0088ff;
+        }
+        .clear-btn {
+            background: #cc6600;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="debug-container">
+        <h1>🔍 True Shuffle Debug Console</h1>
+        <p>This page helps identify browser console errors in the True Shuffle application.</p>
+
+        <div class="test-section">
+            <h2>🧪 Quick Tests</h2>
+            <button class="test-btn" onclick="testSpotifySDK()">Test Spotify SDK</button>
+            <button class="test-btn" onclick="testColorThief()">Test ColorThief</button>
+            <button class="test-btn" onclick="testMonetization()">Test Monetization</button>
+            <button class="test-btn" onclick="testDOMElements()">Test DOM Elements</button>
+            <button class="test-btn" onclick="testEventListeners()">Test Event Listeners</button>
+            <button class="clear-btn" onclick="clearLogs()">Clear Logs</button>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Error Statistics</h2>
+            <div id="error-stats">
+                <div>Total Errors: <span id="total-errors">0</span></div>
+                <div>Total Warnings: <span id="total-warnings">0</span></div>
+                <div>Total Info: <span id="total-info">0</span></div>
+            </div>
+        </div>
+
+        <div class="error-log" id="error-log">
+            <div class="info-item">🚀 Debug console initialized. Monitoring for errors...</div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔧 Common Issues & Solutions</h2>
+            <ul>
+                <li><strong>ColorThief not available:</strong> Check if color-thief.min.js is loading properly</li>
+                <li><strong>Spotify SDK errors:</strong> Verify internet connection and Spotify API status</li>
+                <li><strong>DOM element not found:</strong> Elements may be accessed before DOM is ready</li>
+                <li><strong>Monetization undefined:</strong> monetization.js may not be loading correctly</li>
+                <li><strong>CORS errors:</strong> Check server configuration and API endpoints</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Include all the scripts that the main app uses -->
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+    <script src="color-thief.min.js"></script>
+    <script src="shuffle.js"></script>
+    <script src="settings.js"></script>
+    <script src="monetization.js"></script>
+
+    <script>
+        // Error tracking variables
+        let errorCount = 0;
+        let warningCount = 0;
+        let infoCount = 0;
+
+        // Capture all console errors, warnings, and logs
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        const originalLog = console.log;
+
+        console.error = function(...args) {
+            logMessage('error', args.join(' '));
+            originalError.apply(console, args);
+        };
+
+        console.warn = function(...args) {
+            logMessage('warning', args.join(' '));
+            originalWarn.apply(console, args);
+        };
+
+        console.log = function(...args) {
+            const message = args.join(' ');
+            if (message.includes('❌') || message.includes('ERROR')) {
+                logMessage('error', message);
+            } else if (message.includes('⚠️') || message.includes('WARN')) {
+                logMessage('warning', message);
+            } else {
+                logMessage('info', message);
+            }
+            originalLog.apply(console, args);
+        };
+
+        // Capture unhandled errors
+        window.addEventListener('error', (event) => {
+            logMessage('error', `Unhandled Error: ${event.message} at ${event.filename}:${event.lineno}`);
+        });
+
+        // Capture unhandled promise rejections
+        window.addEventListener('unhandledrejection', (event) => {
+            logMessage('error', `Unhandled Promise Rejection: ${event.reason}`);
+        });
+
+        function logMessage(type, message) {
+            const errorLog = document.getElementById('error-log');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const logItem = document.createElement('div');
+            logItem.className = `${type}-item`;
+            logItem.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            
+            errorLog.appendChild(logItem);
+            errorLog.scrollTop = errorLog.scrollHeight;
+
+            // Update counters
+            if (type === 'error') errorCount++;
+            else if (type === 'warning') warningCount++;
+            else infoCount++;
+
+            updateStats();
+        }
+
+        function updateStats() {
+            document.getElementById('total-errors').textContent = errorCount;
+            document.getElementById('total-warnings').textContent = warningCount;
+            document.getElementById('total-info').textContent = infoCount;
+        }
+
+        function clearLogs() {
+            document.getElementById('error-log').innerHTML = '<div class="info-item">🚀 Logs cleared. Monitoring continues...</div>';
+            errorCount = 0;
+            warningCount = 0;
+            infoCount = 0;
+            updateStats();
+        }
+
+        // Test functions
+        function testSpotifySDK() {
+            console.log('🎵 Testing Spotify SDK...');
+            try {
+                if (typeof window.Spotify !== 'undefined') {
+                    console.log('✅ Spotify SDK loaded successfully');
+                } else {
+                    console.error('❌ Spotify SDK not available');
+                }
+            } catch (error) {
+                console.error('❌ Error testing Spotify SDK:', error);
+            }
+        }
+
+        function testColorThief() {
+            console.log('🎨 Testing ColorThief...');
+            try {
+                if (typeof ColorThief !== 'undefined') {
+                    const colorThief = new ColorThief();
+                    console.log('✅ ColorThief loaded successfully');
+                } else {
+                    console.error('❌ ColorThief not available');
+                }
+            } catch (error) {
+                console.error('❌ Error testing ColorThief:', error);
+            }
+        }
+
+        function testMonetization() {
+            console.log('💰 Testing Monetization system...');
+            try {
+                if (typeof window.monetization !== 'undefined' || typeof TrueShuffleMonetization !== 'undefined') {
+                    console.log('✅ Monetization system loaded');
+                } else {
+                    console.error('❌ Monetization system not available');
+                }
+            } catch (error) {
+                console.error('❌ Error testing Monetization:', error);
+            }
+        }
+
+        function testDOMElements() {
+            console.log('🏗️ Testing critical DOM elements...');
+            const criticalElements = [
+                'login-button',
+                'play-pause',
+                'settings-modal',
+                'shuffle-type',
+                'discover-btn',
+                'track-name',
+                'artist-name'
+            ];
+
+            criticalElements.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    console.log(`✅ Element found: ${id}`);
+                } else {
+                    console.error(`❌ Element missing: ${id}`);
+                }
+            });
+        }
+
+        function testEventListeners() {
+            console.log('🔗 Testing event listener setup...');
+            try {
+                // Test if we can safely access elements and add listeners
+                const testButton = document.createElement('button');
+                testButton.addEventListener('click', () => {});
+                console.log('✅ Event listeners working');
+            } catch (error) {
+                console.error('❌ Error with event listeners:', error);
+            }
+        }
+
+        // Auto-run tests when page loads
+        window.addEventListener('load', () => {
+            console.log('🚀 Debug page loaded, running initial tests...');
+            setTimeout(() => {
+                testSpotifySDK();
+                testColorThief();
+                testMonetization();
+                testDOMElements();
+                testEventListeners();
+            }, 1000);
+        });
+
+        // Load the main app.js to capture its errors
+        setTimeout(() => {
+            console.log('📄 Loading main app.js for error detection...');
+            const script = document.createElement('script');
+            script.src = 'app.js';
+            script.onload = () => console.log('✅ app.js loaded successfully');
+            script.onerror = () => console.error('❌ Failed to load app.js');
+            document.head.appendChild(script);
+        }, 2000);
+    </script>
+</body>
+</html> 

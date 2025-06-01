@@ -1,36 +1,43 @@
 {
-  "genres": [
-    "pop",
-    "rock",
-    "hip-hop",
-    "electronic",
-    "jazz",
-    "classical",
-    "folk",
-    "country",
-    "r-n-b",
-    "indie"
-  ],
-  "moods": [
-    "happy",
-    "energetic",
-    "angry",
-    "melancholic",
-    "chill",
-    "focus",
-    "party"
-  ],
-  "popularity": 100,
-  "libraryRatio": 7,
-  "maxQueueSize": 20,
-  "autoPlaylist": true,
-  "backgroundEffects": true,
-  "skipShortTracks": true,
-  "enableNotifications": true,
-  "enableVisualization": true,
-  "crossfadeEnabled": false,
-  "yearFrom": 1950,
-  "yearTo": 2024,
-  "shuffleType": "true-random",
-  "lastUpdated": "2025-06-01T06:13:47.201Z"
+  "settings": {
+    "genres": [],
+    "moods": [],
+    "languages": [
+      "en"
+    ],
+    "yearFrom": 1950,
+    "yearTo": 2024,
+    "shuffleType": "true-random",
+    "popularity": 70,
+    "explicitContent": true,
+    "trackDurationMin": 30,
+    "trackDurationMax": 600,
+    "autoAdvance": true,
+    "crossfade": false,
+    "volumeNormalization": false,
+    "darkMode": true,
+    "compactMode": false,
+    "showLyrics": false,
+    "showQueue": true,
+    "saveListeningHistory": true,
+    "shareData": false,
+    "analyticsEnabled": true,
+    "autoPlaylist": true,
+    "backgroundEffects": true,
+    "skipShortTracks": false,
+    "enableNotifications": true,
+    "enableVisualization": true,
+    "maxQueueSize": 50,
+    "crossfadeEnabled": false,
+    "libraryRatio": 50,
+    "repeatProtection": "session",
+    "genreDiversity": 0.7,
+    "moodAdaptation": true
+  },
+  "metadata": {
+    "lastUpdated": "2025-06-01T08:03:29.535Z",
+    "version": "2.1",
+    "userPlan": "free",
+    "updatedBy": "danielennis000@gmail.com"
+  }
 }

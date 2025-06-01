@@ -20,7 +20,7 @@ let playbackState = {
   durationMs: 0
 };
 let progressInterval = null;
-let colorThief = new ColorThief();
+let colorThief = null; // Initialize safely after DOM loads
 let playlistCache = {
   likedFromTrueShuffle: null,
   heardOnTrueShuffle: null
@@ -30,6 +30,8 @@ let isPlaying = false;
 let selectedMood = null; // New: track selected mood
 let selectedGenres = []; // New: track selected genres for mix mode
 let currentTrackFeatures = null; // New: track audio features
+let settingsManager = null; // Settings manager instance
+let currentUserId = null; // Current logged-in user ID
 
 // Mood configurations for audio features
 const moodConfigs = {
@@ -116,7 +118,7 @@ const moodConfigs = {
   }
 };
 
-// Get DOM elements
+// Get DOM elements - REVERTED TO ORIGINAL FOR WORKING CONTROLS
 const loginButton = document.getElementById('login-button');
 const authLoginButton = document.getElementById('auth-login-button');
 const logoutButton = document.getElementById('logout-button');
@@ -160,20 +162,42 @@ let customSettings = {
   searchOffset: 800
 };
 
+// Safe ColorThief initialization - KEEP THIS FIX
+function initializeColorThief() {
+  try {
+    if (typeof ColorThief !== 'undefined') {
+      colorThief = new ColorThief();
+      console.log('🎨 ✅ ColorThief initialized successfully');
+      return true;
+    } else {
+      console.log('🎨 ⚠️ ColorThief library not available, using fallback colors');
+      return false;
+    }
+  } catch (error) {
+    console.log('🎨 ⚠️ ColorThief initialization failed, using fallback:', error.message);
+    return false;
+  }
+}
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('📄 Document still loading, waiting for DOMContentLoaded...');
+  console.log('📄 Document loaded, initializing True Shuffle 2.1...');
   
-  // Suppress known non-critical Spotify SDK console errors
+  // KEEP console error suppression - this was helpful
   const originalError = console.error;
   console.error = function(...args) {
     const message = args.join(' ');
     
-    // Suppress known non-critical errors
+    // Suppress known non-critical errors that clutter the console
     if (message.includes('PlayLoad event failed') ||
         message.includes('cpapi.spotify.com') ||
         message.includes('robustness level') ||
-        message.includes('CloudPlaybackClientError')) {
+        message.includes('CloudPlaybackClientError') ||
+        message.includes('The AudioContext was not allowed to start') ||
+        message.includes('autoplay policy') ||
+        message.includes('Web Playback SDK Quick Start') ||
+        message.includes('Network request failed') ||
+        message.includes('GET https://api.spotify.com/v1/tracks/') && (message.includes('400 (Bad Request)') || message.includes('404 (Not Found)'))) {
       return; // Silently ignore these errors
     }
     
@@ -184,7 +208,7 @@ document.addEventListener('DOMContentLoaded', function() {
   initialize();
 });
 
-// Initialize the app
+// Initialize the app - SIMPLIFIED VERSION
 async function initialize() {
     console.log('🚀 Initializing True Shuffle 2.1...');
     
@@ -194,6 +218,9 @@ async function initialize() {
         
         // Initialize DOM elements first
         initializeDOMElements();
+        
+        // Initialize ColorThief safely - KEEP THIS FIX
+        initializeColorThief();
         
         // Initialize enhanced settings system
         await initializeSettings();
@@ -755,8 +782,9 @@ function setupEventListeners() {
         toggleGenre(genre);
       }
     });
+
+    console.log('✅ Event listeners setup complete');
     
-    console.log('✅ All event listeners set up successfully');
   } catch (error) {
     console.error('❌ Error setting up event listeners:', error);
   }
@@ -876,6 +904,11 @@ async function loadUserData() {
 
     const userData = await response.json();
     console.log('✅ User data loaded:', userData);
+
+    // Set current user ID for settings system
+    currentUserId = userData.id;
+    window.currentUserId = userData.id;
+    console.log('👤 Current user ID set:', currentUserId);
 
     // Get DOM elements
     const userImageElement = document.getElementById('user-image');
@@ -1212,51 +1245,16 @@ async function fetchTrulyRandomTracks() {
     }
 }
 
-// Strategy 1: Generate random Spotify track IDs and check if they exist
+// Strategy 1: DISABLED - Generate random Spotify track IDs (too inefficient and spammy)
 async function fetchRandomTracksByIds(userSettings, usedTrackIds, maxTracks) {
-    console.log('🎯 Generating random Spotify track IDs...');
+    console.log('🚫 Random ID generation disabled (too inefficient - causes API spam)');
+    return []; // Return empty array to skip this strategy
     
-    const tracks = [];
-    const base62chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const maxAttempts = 100; // Try up to 100 random IDs
-    
-    for (let i = 0; i < maxAttempts && tracks.length < maxTracks; i++) {
-        try {
-            // Generate a cryptographically random 22-character Spotify track ID
-            let randomId = '';
-            const randomBytes = new Uint8Array(22);
-            crypto.getRandomValues(randomBytes);
-            
-            for (let j = 0; j < 22; j++) {
-                randomId += base62chars[randomBytes[j] % base62chars.length];
-            }
-            
-            // Try to fetch this track
-            const response = await fetch(`https://api.spotify.com/v1/tracks/${randomId}`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            
-            if (response.ok) {
-                const track = await response.json();
-                if (!usedTrackIds.has(track.id) && isValidTrack(track, userSettings)) {
-                    tracks.push(track);
-                    usedTrackIds.add(track.id);
-                    console.log(`🎲 Random ID hit! Found: ${track.name} by ${track.artists[0].name}`);
-                }
-            }
-            
-            // Small delay to avoid rate limiting
-            if (i % 10 === 0) {
-                await new Promise(resolve => setTimeout(resolve, 50));
-            }
-            
-        } catch (error) {
-            // Silent fail for random ID attempts
-        }
-    }
-    
-    console.log(`🎯 Random ID strategy found ${tracks.length} tracks`);
-    return tracks;
+    // The original approach of generating random track IDs is disabled because:
+    // 1. Spotify track IDs are not randomly distributed
+    // 2. Success rate is extremely low (< 0.001%)
+    // 3. It causes hundreds of 400/404 errors that clutter the console
+    // 4. It wastes API quota and may trigger rate limiting
 }
 
 // Strategy 2: Ultra-random search with maximum entropy
@@ -2778,8 +2776,9 @@ function updateBackgroundColor(img) {
     height: img.height
   });
 
-  if (!window.ColorThief) {
-    console.error('🎨 ❌ ColorThief not available! Check if color-thief.min.js loaded properly.');
+  // Check if ColorThief is available
+  if (!colorThief && !window.ColorThief) {
+    console.log('🎨 ⚠️ ColorThief not available, using default background');
     setDefaultBackground();
     return;
   }
@@ -2793,6 +2792,10 @@ function updateBackgroundColor(img) {
       console.log('🎨 ✅ Image loaded, retrying color extraction...');
       updateBackgroundColor(img);
     };
+    img.onerror = () => {
+      console.warn('🎨 ❌ Image failed to load, using default background');
+      setDefaultBackground();
+    };
     return;
   }
   
@@ -2803,12 +2806,19 @@ function updateBackgroundColor(img) {
 }
 
 function tryColorExtractionMethods(img) {
-  const colorThief = new ColorThief();
+  // Use the global colorThief instance or create a new one
+  const thief = colorThief || (window.ColorThief ? new window.ColorThief() : null);
+  
+  if (!thief) {
+    console.warn('🎨 ❌ No ColorThief instance available');
+    setDefaultBackground();
+    return;
+  }
   
   // Method 1: Try ColorThief with the image directly
   console.log('🎨 🎯 METHOD 1: Direct ColorThief extraction...');
   try {
-    const palette = colorThief.getPalette(img, 6, 2);
+    const palette = thief.getPalette(img, 6, 2);
     console.log('🎨 Direct extraction result:', palette);
     
     if (palette && palette.length >= 2) {
@@ -2833,7 +2843,7 @@ function tryColorExtractionMethods(img) {
     // Draw image to canvas
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     
-    const palette = colorThief.getPalette(canvas, 6, 2);
+    const palette = thief.getPalette(canvas, 6, 2);
     console.log('🎨 Canvas extraction result:', palette);
     
     if (palette && palette.length >= 2) {
@@ -4146,7 +4156,7 @@ function isFirstTimeUser() {
 // ============================================
 
 // User data storage
-let currentUserId = null;
+// currentUserId is already declared globally
 
 // Enhanced default settings configuration for production
 const defaultSettings = {
@@ -4207,7 +4217,7 @@ class ProductionSettingsManager {
             
             console.log('✅ Settings Manager initialized successfully');
             return true;
-        } catch (error) {
+  } catch (error) {
             console.error('❌ Settings Manager initialization failed:', error);
             this.settings = { ...defaultSettings };
             return false;
@@ -4244,8 +4254,8 @@ class ProductionSettingsManager {
     async loadFromServer() {
         if (!currentUserId || !accessToken) {
             console.log('⚠️ No user ID or access token available for server load');
-            return null;
-        }
+    return null;
+  }
         
         try {
             const response = await fetch(`/api/settings/${currentUserId}`, {
@@ -4354,8 +4364,15 @@ class ProductionSettingsManager {
     async saveSettings() {
         console.log('💾 Saving settings...');
         
-        // Update current user ID if available
-        this.currentUserId = window.currentUserId || currentUserId;
+        // Update current user ID and access token from global variables
+        const userId = window.currentUserId || currentUserId;
+        const token = window.accessToken || accessToken;
+        
+        // Debug logging
+        console.log('🔍 Save attempt with:', { 
+            userId: userId ? 'present' : 'missing', 
+            token: token ? 'present' : 'missing' 
+        });
         
         // Validate before saving
         if (!this.validateSettings()) {
@@ -4365,8 +4382,12 @@ class ProductionSettingsManager {
 
         try {
             // Try server first if logged in and have access token
-            if (this.currentUserId && window.accessToken) {
+            if (userId && token) {
                 try {
+                    // Set the current values for the server call
+                    this.currentUserId = userId;
+                    window.accessToken = token;
+                    
                     const success = await this.saveToServer();
                     if (success) {
                         this.showNotification('Settings saved to your account', 'success');
@@ -4376,12 +4397,15 @@ class ProductionSettingsManager {
                     }
                 } catch (error) {
                     console.warn('⚠️ Server save failed, falling back to localStorage:', error);
+                    this.showNotification('Server save failed - saved locally instead', 'warning');
                 }
+            } else {
+                console.log('⚠️ User not logged in or no token - saving locally only');
             }
             
             // Fallback to localStorage
             await this.saveToLocalStorage();
-            this.showNotification('Settings saved locally (server unavailable)', 'warning');
+            this.showNotification('Settings saved locally', 'info');
             this.applySettings();
             this.triggerSettingsUpdatedEvent();
             return true;
@@ -4395,8 +4419,12 @@ class ProductionSettingsManager {
 
     async saveToServer() {
         if (!this.currentUserId || !window.accessToken) {
-            throw new Error('No user ID or access token available');
+            const error = `No user ID (${this.currentUserId ? 'present' : 'missing'}) or access token (${window.accessToken ? 'present' : 'missing'}) available`;
+            console.error('❌ Save to server failed:', error);
+            throw new Error(error);
         }
+
+        console.log('🌐 Attempting to save to server for user:', this.currentUserId);
 
         const response = await fetch(`/api/settings/${this.currentUserId}`, {
             method: 'POST',
@@ -4409,9 +4437,11 @@ class ProductionSettingsManager {
             })
         });
 
+        console.log('📡 Server response status:', response.status, response.statusText);
+
         if (response.ok) {
             const result = await response.json();
-            console.log('✅ Settings saved to server');
+            console.log('✅ Settings saved to server successfully');
             
             // Update local settings with validated server response
             if (result.settings) {
@@ -4423,14 +4453,22 @@ class ProductionSettingsManager {
             console.warn('⚠️ Authentication failed during save - token may be expired');
             // Try to refresh token if available
             if (typeof refreshAccessToken === 'function') {
+                console.log('🔄 Attempting to refresh access token...');
                 await refreshAccessToken();
                 // Retry once with new token
                 return this.saveToServer();
             }
             throw new Error('Authentication failed');
         } else {
-            const error = await response.json();
-            throw new Error(`Server save failed: ${error.error || response.statusText}`);
+            let errorMessage;
+            try {
+                const error = await response.json();
+                errorMessage = error.error || response.statusText;
+            } catch (e) {
+                errorMessage = response.statusText;
+            }
+            console.error('❌ Server save failed:', response.status, errorMessage);
+            throw new Error(`Server save failed: ${errorMessage}`);
         }
     }
 
@@ -4497,7 +4535,7 @@ class ProductionSettingsManager {
         if (!modal || !modal.classList.contains('visible')) return;
 
         // Update all form elements with current settings
-        this.loadSettingsIntoModal();
+        loadSettingsIntoModal(this.settings);
     }
 
     collectCurrentSettings() {
@@ -4594,19 +4632,22 @@ class ProductionSettingsManager {
     }
 }
 
-// Global settings manager instance
-let settingsManager = null;
 
 // Show settings modal
 function showSettingsModal() {
     const settingsModal = document.getElementById('settings-modal');
     if (settingsModal) {
+        console.log('🔧 Opening settings modal...');
+        
         // Load current settings into modal
         if (settingsManager && settingsManager.isLoaded) {
+            console.log('📖 Loading settings from settingsManager:', settingsManager.getSettings());
             loadSettingsIntoModal(settingsManager.getSettings());
         } else {
+            console.log('📖 Loading settings via legacy method...');
             // Fallback for legacy support
             loadUserSettings().then(currentSettings => {
+                console.log('📖 Legacy settings loaded:', currentSettings);
                 loadSettingsIntoModal(currentSettings);
             });
         }
@@ -4619,6 +4660,8 @@ function showSettingsModal() {
         setupSettingsModalListeners();
         
         console.log('✅ Settings modal shown');
+    } else {
+        console.error('❌ Settings modal element not found!');
     }
 }
 
