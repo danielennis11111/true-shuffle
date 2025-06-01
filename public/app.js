@@ -4022,30 +4022,54 @@ class ProductionSettingsManager {
     }
 
     async loadFromServer() {
-        if (!currentUserId) return null;
-        
-        const response = await fetch(`/api/settings/${currentUserId}`, {
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        if (response.ok) {
-            const serverSettings = await response.json();
-            console.log('✅ Settings loaded from server');
-            return serverSettings;
+        if (!currentUserId || !accessToken) {
+            console.log('⚠️ No user ID or access token available for server load');
+            return null;
         }
+        
+        try {
+            const response = await fetch(`/api/settings/${currentUserId}`, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
 
-        throw new Error(`Server load failed: ${response.status}`);
+            if (response.ok) {
+                const data = await response.json();
+                console.log('✅ Settings loaded from server');
+                return data.settings;
+            } else if (response.status === 401) {
+                console.warn('⚠️ Authentication failed - token may be expired');
+                // Try to refresh token if available
+                if (typeof refreshAccessToken === 'function') {
+                    await refreshAccessToken();
+                    // Retry once with new token
+                    return this.loadFromServer();
+                }
+                return null;
+            } else {
+                console.warn('⚠️ Server load failed:', response.status, response.statusText);
+                return null;
+            }
+        } catch (error) {
+            console.warn('⚠️ Server load error:', error);
+            return null;
+        }
     }
 
     loadFromLocalStorage() {
-        const saved = localStorage.getItem('trueShuffleSettings');
-        if (saved && saved !== 'undefined' && saved !== 'null') {
-            const localSettings = JSON.parse(saved);
-            console.log('✅ Settings loaded from localStorage');
-            return localSettings;
+        try {
+            const saved = localStorage.getItem('trueShuffleSettings');
+            if (saved && saved !== 'undefined' && saved !== 'null') {
+                const data = JSON.parse(saved);
+                // Handle both old format and new format
+                const settings = data.settings || data;
+                console.log('✅ Settings loaded from localStorage');
+                return settings;
+            }
+        } catch (error) {
+            console.warn('⚠️ localStorage load failed:', error);
         }
         return null;
     }
@@ -4110,6 +4134,9 @@ class ProductionSettingsManager {
     async saveSettings() {
         console.log('💾 Saving settings...');
         
+        // Update current user ID if available
+        this.currentUserId = window.currentUserId || currentUserId;
+        
         // Validate before saving
         if (!this.validateSettings()) {
             console.error('❌ Cannot save invalid settings');
@@ -4117,29 +4144,26 @@ class ProductionSettingsManager {
         }
 
         try {
-            // Try server first if logged in
-            if (currentUserId) {
+            // Try server first if logged in and have access token
+            if (this.currentUserId && window.accessToken) {
                 try {
-                    await this.saveToServer();
-                    this.showNotification('Settings saved to your account', 'success');
+                    const success = await this.saveToServer();
+                    if (success) {
+                        this.showNotification('Settings saved to your account', 'success');
+                        this.applySettings();
+                        this.triggerSettingsUpdatedEvent();
+                        return true;
+                    }
                 } catch (error) {
-                    console.warn('⚠️ Server save failed, using localStorage:', error);
-                    await this.saveToLocalStorage();
-                    this.showNotification('Settings saved locally (server unavailable)', 'warning');
+                    console.warn('⚠️ Server save failed, falling back to localStorage:', error);
                 }
-            } else {
-                await this.saveToLocalStorage();
-                this.showNotification('Settings saved locally', 'info');
             }
-
-            // Apply settings immediately
-            this.applySettings();
             
-            // Trigger settings updated event
-            window.dispatchEvent(new CustomEvent('settingsUpdated', { 
-                detail: this.settings 
-            }));
-
+            // Fallback to localStorage
+            await this.saveToLocalStorage();
+            this.showNotification('Settings saved locally (server unavailable)', 'warning');
+            this.applySettings();
+            this.triggerSettingsUpdatedEvent();
             return true;
 
         } catch (error) {
@@ -4150,33 +4174,61 @@ class ProductionSettingsManager {
     }
 
     async saveToServer() {
-        const response = await fetch(`/api/settings/${currentUserId}`, {
+        if (!this.currentUserId || !window.accessToken) {
+            throw new Error('No user ID or access token available');
+        }
+
+        const response = await fetch(`/api/settings/${this.currentUserId}`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${accessToken}`,
+                'Authorization': `Bearer ${window.accessToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                settings: this.settings,
-                timestamp: Date.now(),
-                version: '2.1'
+                settings: this.settings
             })
         });
 
-        if (!response.ok) {
-            throw new Error(`Server save failed: ${response.status}`);
+        if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Settings saved to server');
+            
+            // Update local settings with validated server response
+            if (result.settings) {
+                this.settings = { ...this.settings, ...result.settings };
+            }
+            
+            return true;
+        } else if (response.status === 401) {
+            console.warn('⚠️ Authentication failed during save - token may be expired');
+            // Try to refresh token if available
+            if (typeof refreshAccessToken === 'function') {
+                await refreshAccessToken();
+                // Retry once with new token
+                return this.saveToServer();
+            }
+            throw new Error('Authentication failed');
+        } else {
+            const error = await response.json();
+            throw new Error(`Server save failed: ${error.error || response.statusText}`);
         }
-
-        console.log('✅ Settings saved to server');
     }
 
     async saveToLocalStorage() {
-        localStorage.setItem('trueShuffleSettings', JSON.stringify({
+        const dataToSave = {
             settings: this.settings,
             timestamp: Date.now(),
             version: '2.1'
-        }));
+        };
+        localStorage.setItem('trueShuffleSettings', JSON.stringify(dataToSave));
         console.log('✅ Settings saved to localStorage');
+    }
+
+    triggerSettingsUpdatedEvent() {
+        // Trigger settings updated event
+        window.dispatchEvent(new CustomEvent('settingsUpdated', { 
+            detail: this.settings 
+        }));
     }
 
     applySettings() {
@@ -5309,3 +5361,110 @@ console.log('- testYearSettings(yearFrom, yearTo) - Test specific year range');
 console.log('- test90sMusic() - Test 1990s music');
 console.log('- test2000sMusic() - Test 2000s music');
 console.log('- testModernMusic() - Test 2020-2024 music');
+
+// Debug function to test premium subscription (for testing)
+window.debugUpgradeToPremium = async function() {
+    if (!currentUserId || !accessToken) {
+        console.error('❌ Must be logged in to upgrade to premium');
+        return;
+    }
+    
+    try {
+        const subscriptionEndDate = new Date();
+        subscriptionEndDate.setFullYear(subscriptionEndDate.getFullYear() + 1); // 1 year from now
+        
+        const response = await fetch('/api/user/subscription', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                plan: 'premium',
+                subscriptionEndsAt: subscriptionEndDate.toISOString()
+            })
+        });
+        
+        if (response.ok) {
+            console.log('✅ Successfully upgraded to premium for testing!');
+            showNotification('Upgraded to Premium for testing! Settings will now save to your account.', 'success');
+            
+            // Reload user data to reflect subscription change
+            if (typeof loadUserData === 'function') {
+                await loadUserData();
+            }
+            
+            return true;
+        } else {
+            console.error('❌ Failed to upgrade to premium:', await response.text());
+            return false;
+        }
+    } catch (error) {
+        console.error('❌ Error upgrading to premium:', error);
+        return false;
+    }
+};
+
+// Debug function to test settings saving
+window.debugTestSettingsSave = async function() {
+    if (!settingsManager || !settingsManager.isLoaded) {
+        console.error('❌ Settings manager not loaded');
+        return;
+    }
+    
+    console.log('🧪 Testing settings save...');
+    
+    // Modify some settings
+    settingsManager.setSetting('genres', ['rock', 'electronic', 'jazz']);
+    settingsManager.setSetting('languages', ['en', 'es']);
+    settingsManager.setSetting('popularity', 60);
+    settingsManager.setSetting('explicitContent', false);
+    
+    const success = await settingsManager.saveSettings();
+    
+    if (success) {
+        console.log('✅ Settings save test successful!');
+        showNotification('Settings test successful! Check the console for details.', 'success');
+    } else {
+        console.log('❌ Settings save test failed!');
+        showNotification('Settings test failed! Check the console for errors.', 'error');
+    }
+    
+    return success;
+};
+
+// Debug function to check current subscription status
+window.debugCheckSubscription = async function() {
+    if (!currentUserId || !accessToken) {
+        console.error('❌ Must be logged in to check subscription');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/user/profile', {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const userProfile = await response.json();
+            console.log('👤 User Profile:', userProfile);
+            console.log('📊 Subscription Status:', userProfile.subscription);
+            showNotification(`Current plan: ${userProfile.subscription.plan}`, 'info');
+            return userProfile;
+        } else {
+            console.error('❌ Failed to get user profile:', await response.text());
+            return null;
+        }
+    } catch (error) {
+        console.error('❌ Error checking subscription:', error);
+        return null;
+    }
+};
+
+console.log('🧪 Debug functions available:');
+console.log('- debugUpgradeToPremium() - Upgrade to premium for testing');
+console.log('- debugTestSettingsSave() - Test settings saving functionality');
+console.log('- debugCheckSubscription() - Check current subscription status');
