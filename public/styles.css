@@ -1080,6 +1080,16 @@ body {
 
 .settings-group {
     margin-bottom: 32px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.3s ease;
+}
+
+.settings-group:hover {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(30, 215, 96, 0.3);
 }
 
 .settings-group h3 {
@@ -1089,194 +1099,228 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
+    font-weight: 600;
 }
 
+/* Selection Counter */
+.selection-counter {
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(30, 215, 96, 0.1);
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(30, 215, 96, 0.2);
+}
+
+.selection-counter span {
+    color: #1db954;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.counter-bar {
+    width: 120px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-left: 12px;
+}
+
+.counter-progress {
+    height: 100%;
+    background: linear-gradient(90deg, #1db954 0%, #1ed760 100%);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+/* Enhanced Genre Grid */
 .settings-genre-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-    gap: 8px;
-    margin-bottom: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
 }
 
 .settings-genre-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
     color: #ffffff;
-    padding: 8px 12px;
-    border-radius: 20px;
+    padding: 12px 8px;
+    border-radius: 12px;
     cursor: pointer;
     transition: all 0.3s ease;
     font-size: 12px;
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-height: 70px;
+    position: relative;
+    overflow: hidden;
 }
 
 .settings-genre-btn:hover {
     background: rgba(30, 215, 96, 0.2);
     border-color: #1db954;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(30, 215, 96, 0.3);
 }
 
 .settings-genre-btn.active {
-    background: #1db954;
+    background: linear-gradient(135deg, #1db954 0%, #1ed760 100%);
     border-color: #1db954;
-    color: #000;
+    color: #000000;
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(30, 215, 96, 0.4);
 }
 
+.settings-genre-btn.active::after {
+    content: '✓';
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    background: rgba(0, 0, 0, 0.2);
+    color: #ffffff;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.settings-genre-btn i {
+    font-size: 16px;
+    margin-bottom: 2px;
+}
+
+.settings-genre-btn span {
+    font-size: 11px;
+    line-height: 1.2;
+}
+
+/* Enhanced Mood Grid */
 .settings-mood-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
     gap: 12px;
+    margin-bottom: 16px;
 }
 
 .settings-mood-option {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    padding: 16px 12px;
     border-radius: 12px;
-    padding: 12px;
-    text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
-    color: #ffffff;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-height: 90px;
+    position: relative;
+    overflow: hidden;
 }
 
 .settings-mood-option:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: #1db954;
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
 .settings-mood-option.active {
-    background: rgba(30, 215, 96, 0.2);
-    border-color: #1db954;
-    color: #1db954;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
+    border-color: var(--mood-color, #1db954);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), 0 0 20px var(--mood-color, #1db954);
+}
+
+.settings-mood-option.active::after {
+    content: '✓';
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: var(--mood-color, #1db954);
+    color: #000000;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: bold;
 }
 
 .settings-mood-option i {
     font-size: 20px;
     margin-bottom: 4px;
-    display: block;
+    color: var(--mood-color, #ffffff);
 }
 
 .settings-mood-option span {
     font-size: 12px;
     font-weight: 500;
+    line-height: 1.2;
 }
 
-.settings-control {
-    margin-bottom: 20px;
-}
-
-.settings-control label {
-    display: block;
-    color: #ffffff;
-    margin-bottom: 8px;
-    font-size: 14px;
-}
-
-.settings-control input[type="range"] {
-    width: 100%;
-    margin: 8px 0;
-}
-
-.settings-toggle {
-    margin-bottom: 16px;
-}
-
-.settings-toggle label {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    cursor: pointer;
-    color: #ffffff;
-    font-size: 14px;
-}
-
-.settings-toggle input[type="checkbox"] {
-    display: none;
-}
-
-.toggle-slider {
-    position: relative;
-    width: 44px;
-    height: 24px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
-    transition: all 0.3s ease;
-}
-
-.toggle-slider:before {
-    content: '';
+.mood-color-indicator {
     position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 20px;
-    height: 20px;
-    background: #ffffff;
-    border-radius: 50%;
-    transition: all 0.3s ease;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 30px;
+    height: 4px;
+    border-radius: 2px;
+    opacity: 0.8;
 }
 
-.settings-toggle input[type="checkbox"]:checked + .toggle-slider {
-    background: #1db954;
+.settings-mood-option.active .mood-color-indicator {
+    opacity: 1;
+    box-shadow: 0 0 10px currentColor;
 }
 
-.settings-toggle input[type="checkbox"]:checked + .toggle-slider:before {
-    transform: translateX(20px);
+/* Control Buttons Enhancement */
+.genre-controls,
+.mood-controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 16px;
 }
 
 .settings-control-btn {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: #ffffff;
-    padding: 6px 12px;
-    border-radius: 16px;
+    padding: 8px 16px;
+    border-radius: 20px;
     cursor: pointer;
     transition: all 0.3s ease;
-    font-size: 11px;
-    margin-right: 8px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
 }
 
 .settings-control-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(30, 215, 96, 0.2);
+    border-color: #1db954;
+    color: #1db954;
 }
 
-.modal-footer {
-    padding: 20px 24px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-}
-
-.reset-btn {
-    background: rgba(255, 107, 107, 0.1);
-    border: 1px solid rgba(255, 107, 107, 0.3);
-    color: #ff6b6b;
-    padding: 10px 20px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 14px;
-}
-
-.reset-btn:hover {
-    background: rgba(255, 107, 107, 0.2);
-    border-color: #ff6b6b;
-}
-
-.save-btn {
-    background: #1db954;
-    border: 1px solid #1db954;
-    color: #000;
-    padding: 10px 20px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 14px;
-    font-weight: 600;
-}
-
-.save-btn:hover {
-    background: #1ed760;
-    transform: translateY(-1px);
+.settings-control-btn i {
+    font-size: 11px;
 }
 
 /* Notification System */

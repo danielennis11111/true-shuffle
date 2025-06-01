@@ -3151,8 +3151,262 @@ function loadSettingsIntoModal(settings) {
 
 // Setup settings modal interaction listeners
 function setupSettingsModalListeners() {
-    // Implement your settings modal interaction logic here
-    console.log('✅ Settings modal interaction listeners set up');
+    console.log('🎛️ Setting up enhanced settings modal listeners...');
+    
+    // Close modal listeners
+    const closeBtn = document.getElementById('close-settings');
+    const settingsModal = document.getElementById('settings-modal');
+    
+    if (closeBtn) {
+        closeBtn.addEventListener('click', hideSettingsModal);
+    }
+    
+    if (settingsModal) {
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) {
+                hideSettingsModal();
+            }
+        });
+    }
+    
+    // Enhanced genre selection with visual feedback
+    const genreButtons = document.querySelectorAll('.settings-genre-btn');
+    genreButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.classList.toggle('active');
+            updateGenreCounter();
+            addButtonClickFeedback(btn);
+        });
+    });
+    
+    // Enhanced mood selection with visual feedback
+    const moodOptions = document.querySelectorAll('.settings-mood-option');
+    moodOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            option.classList.toggle('active');
+            updateMoodCounter();
+            addButtonClickFeedback(option);
+            
+            // Set CSS custom property for mood color
+            const color = option.dataset.color;
+            if (color) {
+                option.style.setProperty('--mood-color', color);
+            }
+        });
+    });
+    
+    // Control buttons
+    const selectAllGenres = document.getElementById('settings-select-all');
+    const deselectAllGenres = document.getElementById('settings-deselect-all');
+    const selectAllMoods = document.getElementById('mood-select-all');
+    const deselectAllMoods = document.getElementById('mood-deselect-all');
+    
+    if (selectAllGenres) {
+        selectAllGenres.addEventListener('click', () => {
+            genreButtons.forEach(btn => btn.classList.add('active'));
+            updateGenreCounter();
+            showNotification('All genres selected', 'success');
+        });
+    }
+    
+    if (deselectAllGenres) {
+        deselectAllGenres.addEventListener('click', () => {
+            genreButtons.forEach(btn => btn.classList.remove('active'));
+            updateGenreCounter();
+            showNotification('All genres cleared', 'info');
+        });
+    }
+    
+    if (selectAllMoods) {
+        selectAllMoods.addEventListener('click', () => {
+            moodOptions.forEach(option => {
+                option.classList.add('active');
+                const color = option.dataset.color;
+                if (color) {
+                    option.style.setProperty('--mood-color', color);
+                }
+            });
+            updateMoodCounter();
+            showNotification('All moods selected', 'success');
+        });
+    }
+    
+    if (deselectAllMoods) {
+        deselectAllMoods.addEventListener('click', () => {
+            moodOptions.forEach(option => option.classList.remove('active'));
+            updateMoodCounter();
+            showNotification('All moods cleared', 'info');
+        });
+    }
+    
+    // Slider listeners with real-time updates
+    const popularitySlider = document.getElementById('settings-popularity');
+    const librarySlider = document.getElementById('settings-library-ratio');
+    
+    if (popularitySlider) {
+        popularitySlider.addEventListener('input', updatePopularityLabel);
+    }
+    
+    if (librarySlider) {
+        librarySlider.addEventListener('input', updateLibraryLabel);
+    }
+    
+    // Save and reset buttons
+    const saveBtn = document.getElementById('save-settings');
+    const resetBtn = document.getElementById('reset-settings');
+    
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            saveUserSettings();
+            hideSettingsModal();
+        });
+    }
+    
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+            if (confirm('Reset all settings to default? This cannot be undone.')) {
+                resetUserSettings();
+                loadSettingsIntoModal(defaultSettings);
+                updateGenreCounter();
+                updateMoodCounter();
+                showNotification('Settings reset to defaults', 'info');
+            }
+        });
+    }
+    
+    // Initialize counters
+    updateGenreCounter();
+    updateMoodCounter();
+    updatePopularityLabel();
+    updateLibraryLabel();
+    
+    console.log('✅ Enhanced settings modal listeners setup complete');
+}
+
+// Update genre selection counter and progress bar
+function updateGenreCounter() {
+    const activeGenres = document.querySelectorAll('.settings-genre-btn.active');
+    const totalGenres = document.querySelectorAll('.settings-genre-btn');
+    const counter = document.getElementById('genre-counter');
+    const progress = document.getElementById('genre-progress');
+    
+    if (counter && progress) {
+        const activeCount = activeGenres.length;
+        const totalCount = totalGenres.length;
+        const percentage = (activeCount / totalCount) * 100;
+        
+        counter.textContent = `${activeCount} of ${totalCount} genres selected`;
+        progress.style.width = `${percentage}%`;
+        
+        // Update progress bar color based on selection
+        if (percentage === 0) {
+            progress.style.background = 'linear-gradient(90deg, #ff6b6b 0%, #ff8e8e 100%)';
+        } else if (percentage === 100) {
+            progress.style.background = 'linear-gradient(90deg, #1db954 0%, #1ed760 100%)';
+        } else {
+            progress.style.background = 'linear-gradient(90deg, #ffd93d 0%, #ff6b9d 100%)';
+        }
+    }
+}
+
+// Update mood selection counter and progress bar
+function updateMoodCounter() {
+    const activeMoods = document.querySelectorAll('.settings-mood-option.active');
+    const totalMoods = document.querySelectorAll('.settings-mood-option');
+    const counter = document.getElementById('mood-counter');
+    const progress = document.getElementById('mood-progress');
+    
+    if (counter && progress) {
+        const activeCount = activeMoods.length;
+        const totalCount = totalMoods.length;
+        const percentage = (activeCount / totalCount) * 100;
+        
+        counter.textContent = `${activeCount} of ${totalCount} moods selected`;
+        progress.style.width = `${percentage}%`;
+        
+        // Update progress bar color based on selection
+        if (percentage === 0) {
+            progress.style.background = 'linear-gradient(90deg, #ff6b6b 0%, #ff8e8e 100%)';
+        } else if (percentage === 100) {
+            progress.style.background = 'linear-gradient(90deg, #9013fe 0%, #ff6b9d 100%)';
+        } else {
+            progress.style.background = 'linear-gradient(90deg, #50e3c2 0%, #9013fe 100%)';
+        }
+    }
+}
+
+// Update popularity slider label
+function updatePopularityLabel() {
+    const slider = document.getElementById('settings-popularity');
+    const label = document.getElementById('settings-popularity-label');
+    
+    if (slider && label) {
+        const value = parseInt(slider.value);
+        let description = '';
+        
+        if (value <= 20) description = 'Underground';
+        else if (value <= 40) description = 'Indie';
+        else if (value <= 60) description = 'Balanced';
+        else if (value <= 80) description = 'Popular';
+        else description = 'Mainstream';
+        
+        label.textContent = `${description} (${value}%)`;
+    }
+}
+
+// Update library ratio slider label
+function updateLibraryLabel() {
+    const slider = document.getElementById('settings-library-ratio');
+    const label = document.getElementById('settings-library-label');
+    
+    if (slider && label) {
+        const value = parseInt(slider.value);
+        const myLibrary = value;
+        const newMusic = 100 - value;
+        
+        label.textContent = `${myLibrary}% / ${newMusic}%`;
+    }
+}
+
+// Add visual feedback for button clicks
+function addButtonClickFeedback(element) {
+    element.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+        element.style.transform = '';
+    }, 150);
+    
+    // Create ripple effect
+    const ripple = document.createElement('div');
+    ripple.style.cssText = `
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.6);
+        width: 20px;
+        height: 20px;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%) scale(0);
+        animation: ripple 0.6s linear;
+        pointer-events: none;
+    `;
+    
+    // Add ripple animation CSS if not exists
+    if (!document.querySelector('#ripple-style')) {
+        const style = document.createElement('style');
+        style.id = 'ripple-style';
+        style.textContent = `
+            @keyframes ripple {
+                to {
+                    transform: translate(-50%, -50%) scale(4);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    element.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 600);
 }
 
 // Reset user settings

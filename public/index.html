@@ -367,58 +367,125 @@
                 <!-- Genre Preferences -->
                 <div class="settings-group">
                     <h3><i class="fas fa-music"></i> Genre Preferences</h3>
+                    <div class="selection-counter">
+                        <span id="genre-counter">12 of 12 genres selected</span>
+                        <div class="counter-bar">
+                            <div id="genre-progress" class="counter-progress" style="width: 100%"></div>
+                        </div>
+                    </div>
                     <div class="settings-genre-grid">
-                        <button class="settings-genre-btn active" data-genre="pop">Pop</button>
-                        <button class="settings-genre-btn active" data-genre="rock">Rock</button>
-                        <button class="settings-genre-btn active" data-genre="hip-hop">Hip Hop</button>
-                        <button class="settings-genre-btn active" data-genre="electronic">Electronic</button>
-                        <button class="settings-genre-btn active" data-genre="jazz">Jazz</button>
-                        <button class="settings-genre-btn active" data-genre="classical">Classical</button>
-                        <button class="settings-genre-btn active" data-genre="folk">Folk</button>
-                        <button class="settings-genre-btn active" data-genre="country">Country</button>
-                        <button class="settings-genre-btn active" data-genre="r-n-b">R&B</button>
-                        <button class="settings-genre-btn active" data-genre="reggae">Reggae</button>
-                        <button class="settings-genre-btn active" data-genre="metal">Metal</button>
-                        <button class="settings-genre-btn active" data-genre="indie">Indie</button>
+                        <button class="settings-genre-btn active" data-genre="pop">
+                            <i class="fas fa-heart"></i>
+                            <span>Pop</span>
+                        </button>
+                        <button class="settings-genre-btn active" data-genre="rock">
+                            <i class="fas fa-guitar"></i>
+                            <span>Rock</span>
+                        </button>
+                        <button class="settings-genre-btn active" data-genre="hip-hop">
+                            <i class="fas fa-microphone"></i>
+                            <span>Hip Hop</span>
+                        </button>
+                        <button class="settings-genre-btn active" data-genre="electronic">
+                            <i class="fas fa-volume-up"></i>
+                            <span>Electronic</span>
+                        </button>
+                        <button class="settings-genre-btn active" data-genre="jazz">
+                            <i class="fas fa-saxophone"></i>
+                            <span>Jazz</span>
+                        </button>
+                        <button class="settings-genre-btn active" data-genre="classical">
+                            <i class="fas fa-music"></i>
+                            <span>Classical</span>
+                        </button>
+                        <button class="settings-genre-btn active" data-genre="folk">
+                            <i class="fas fa-leaf"></i>
+                            <span>Folk</span>
+                        </button>
+                        <button class="settings-genre-btn active" data-genre="country">
+                            <i class="fas fa-hat-cowboy"></i>
+                            <span>Country</span>
+                        </button>
+                        <button class="settings-genre-btn active" data-genre="r-n-b">
+                            <i class="fas fa-compact-disc"></i>
+                            <span>R&B</span>
+                        </button>
+                        <button class="settings-genre-btn active" data-genre="reggae">
+                            <i class="fas fa-cannabis"></i>
+                            <span>Reggae</span>
+                        </button>
+                        <button class="settings-genre-btn active" data-genre="metal">
+                            <i class="fas fa-bolt"></i>
+                            <span>Metal</span>
+                        </button>
+                        <button class="settings-genre-btn active" data-genre="indie">
+                            <i class="fas fa-star"></i>
+                            <span>Indie</span>
+                        </button>
                     </div>
                     <div class="genre-controls">
-                        <button id="settings-select-all" class="settings-control-btn">Select All</button>
-                        <button id="settings-deselect-all" class="settings-control-btn">Deselect All</button>
+                        <button id="settings-select-all" class="settings-control-btn">
+                            <i class="fas fa-check-double"></i> Select All
+                        </button>
+                        <button id="settings-deselect-all" class="settings-control-btn">
+                            <i class="fas fa-times"></i> Clear All
+                        </button>
                     </div>
                 </div>
 
                 <!-- Mood Preferences -->
                 <div class="settings-group">
                     <h3><i class="fas fa-palette"></i> Mood Preferences</h3>
+                    <div class="selection-counter">
+                        <span id="mood-counter">7 of 7 moods selected</span>
+                        <div class="counter-bar">
+                            <div id="mood-progress" class="counter-progress" style="width: 100%"></div>
+                        </div>
+                    </div>
                     <div class="settings-mood-grid">
-                        <div class="settings-mood-option active" data-mood="happy">
+                        <div class="settings-mood-option active" data-mood="happy" data-color="#FFD700">
                             <i class="fas fa-sun"></i>
                             <span>Happy</span>
+                            <div class="mood-color-indicator" style="background: #FFD700"></div>
                         </div>
-                        <div class="settings-mood-option active" data-mood="energetic">
+                        <div class="settings-mood-option active" data-mood="energetic" data-color="#FF4444">
                             <i class="fas fa-bolt"></i>
                             <span>Energetic</span>
+                            <div class="mood-color-indicator" style="background: #FF4444"></div>
                         </div>
-                        <div class="settings-mood-option active" data-mood="angry">
+                        <div class="settings-mood-option active" data-mood="angry" data-color="#CC0000">
                             <i class="fas fa-fire"></i>
                             <span>Angry</span>
+                            <div class="mood-color-indicator" style="background: #CC0000"></div>
                         </div>
-                        <div class="settings-mood-option active" data-mood="melancholic">
+                        <div class="settings-mood-option active" data-mood="melancholic" data-color="#4A90E2">
                             <i class="fas fa-cloud-rain"></i>
                             <span>Sad</span>
+                            <div class="mood-color-indicator" style="background: #4A90E2"></div>
                         </div>
-                        <div class="settings-mood-option active" data-mood="chill">
+                        <div class="settings-mood-option active" data-mood="chill" data-color="#50E3C2">
                             <i class="fas fa-leaf"></i>
                             <span>Chill</span>
+                            <div class="mood-color-indicator" style="background: #50E3C2"></div>
                         </div>
-                        <div class="settings-mood-option active" data-mood="focus">
+                        <div class="settings-mood-option active" data-mood="focus" data-color="#9013FE">
                             <i class="fas fa-brain"></i>
                             <span>Focus</span>
+                            <div class="mood-color-indicator" style="background: #9013FE"></div>
                         </div>
-                        <div class="settings-mood-option active" data-mood="party">
+                        <div class="settings-mood-option active" data-mood="party" data-color="#FF6B9D">
                             <i class="fas fa-party-horn"></i>
                             <span>Party</span>
+                            <div class="mood-color-indicator" style="background: #FF6B9D"></div>
                         </div>
+                    </div>
+                    <div class="mood-controls">
+                        <button id="mood-select-all" class="settings-control-btn">
+                            <i class="fas fa-check-double"></i> Select All
+                        </button>
+                        <button id="mood-deselect-all" class="settings-control-btn">
+                            <i class="fas fa-times"></i> Clear All
+                        </button>
                     </div>
                 </div>
 
