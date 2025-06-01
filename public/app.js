@@ -1390,6 +1390,8 @@ function initializeSpotifyPlayer() {
         startVisualizerAnimation();
       } else {
         stopVisualizerAnimation();
+        // Reset background to default when music is paused
+        resetBackgroundToDefault();
       }
     });
     
@@ -1738,54 +1740,222 @@ function updateCurrentTrackInfo(track) {
   }
 }
 
-// Update background color based on album art
+// Dynamic background color system with animated gradients
+let gradientAnimationId = null;
+let currentColors = null;
+let gradientPosition = 0;
+
+// Update background color based on album art with advanced color extraction
 function updateBackgroundColor(img) {
   try {
     if (!window.ColorThief) {
       console.log('🎨 ColorThief not available, using default colors');
+      setDefaultBackground();
       return;
     }
     
     const colorThief = new ColorThief();
     
+    // Wait for image to load completely
+    if (!img.complete || img.naturalHeight === 0) {
+      img.onload = () => updateBackgroundColor(img);
+      return;
+    }
+    
     // Create a canvas to handle CORS properly
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = img.width;
-    canvas.height = img.height;
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
     
     // Draw image to canvas
     ctx.drawImage(img, 0, 0);
     
-    // Get the dominant color
-    const dominantColor = colorThief.getColor(canvas);
+    // Get a palette of colors (2-5 colors)
+    const palette = colorThief.getPalette(canvas, 5, 2);
     
-    if (dominantColor) {
-      const [r, g, b] = dominantColor;
+    if (palette && palette.length >= 2) {
+      // Extract two most dominant colors
+      const [primaryColor, secondaryColor] = palette;
       
-      // Create gradient with the dominant color for our cream background
-      const gradient = `linear-gradient(135deg, 
-        rgba(${r}, ${g}, ${b}, 0.1) 0%, 
-        rgba(244, 241, 232, 0.9) 50%, 
-        rgba(232, 224, 211, 1) 100%)`;
+      // Enhance the colors for better visual impact
+      const enhancedPrimary = enhanceColor(primaryColor);
+      const enhancedSecondary = enhanceColor(secondaryColor);
       
-      const background = document.getElementById('app-background');
-      if (background) {
-        background.style.background = gradient;
-      }
+      // Store colors for animation
+      currentColors = {
+        primary: enhancedPrimary,
+        secondary: enhancedSecondary,
+        accent: palette[2] ? enhanceColor(palette[2]) : enhancedPrimary
+      };
       
-      console.log('🎨 Background updated with dominant color:', `rgb(${r}, ${g}, ${b})`);
+      console.log('🎨 Extracted colors:', {
+        primary: `rgb(${enhancedPrimary.join(', ')})`,
+        secondary: `rgb(${enhancedSecondary.join(', ')})`,
+        accent: currentColors.accent ? `rgb(${currentColors.accent.join(', ')})` : 'none'
+      });
+      
+      // Start the animated gradient
+      startGradientAnimation();
+      
+    } else {
+      console.log('🎨 Could not extract enough colors from album art');
+      setDefaultBackground();
     }
   } catch (error) {
-    console.log('🎨 Color extraction failed, using default gradient');
-    
-    // Fallback to default cream gradient
-    const defaultGradient = 'linear-gradient(135deg, #f4f1e8 0%, #e8e0d3 100%)';
-    const background = document.getElementById('app-background');
-    if (background) {
-      background.style.background = defaultGradient;
-    }
+    console.error('🎨 Color extraction failed:', error);
+    setDefaultBackground();
   }
+}
+
+// Enhance color saturation and vibrance for better visual impact
+function enhanceColor([r, g, b], factor = 1.3) {
+  // Convert to HSL for better color manipulation
+  const [h, s, l] = rgbToHsl(r, g, b);
+  
+  // Enhance saturation and adjust lightness
+  const enhancedS = Math.min(1, s * factor);
+  const enhancedL = l < 0.5 ? Math.max(0.2, l * 1.2) : Math.min(0.8, l * 0.9);
+  
+  // Convert back to RGB
+  return hslToRgb(h, enhancedS, enhancedL);
+}
+
+// RGB to HSL conversion
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+
+  if (max === min) {
+    h = s = 0; // achromatic
+  } else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return [h, s, l];
+}
+
+// HSL to RGB conversion
+function hslToRgb(h, s, l) {
+  let r, g, b;
+
+  if (s === 0) {
+    r = g = b = l; // achromatic
+  } else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
+  }
+
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+// Start animated gradient that evolves with the music
+function startGradientAnimation() {
+  if (!currentColors) return;
+  
+  // Stop any existing animation
+  if (gradientAnimationId) {
+    cancelAnimationFrame(gradientAnimationId);
+  }
+  
+  const background = document.getElementById('app-background');
+  if (!background) return;
+  
+  const animate = () => {
+    gradientPosition += 0.5; // Slow, smooth movement
+    
+    // Create time-based color variations
+    const time = Date.now() * 0.001; // Convert to seconds
+    const wave1 = Math.sin(time * 0.3) * 0.3 + 0.7; // Slow wave
+    const wave2 = Math.cos(time * 0.2) * 0.2 + 0.8; // Different frequency
+    
+    // Calculate dynamic positions for gradient stops
+    const pos1 = 20 + Math.sin(time * 0.1) * 20; // 0-40%
+    const pos2 = 60 + Math.cos(time * 0.15) * 25; // 35-85%
+    const pos3 = 80 + Math.sin(time * 0.08) * 15; // 65-95%
+    
+    // Create color variations with time
+    const primary = currentColors.primary.map(c => Math.round(c * wave1));
+    const secondary = currentColors.secondary.map(c => Math.round(c * wave2));
+    const accent = currentColors.accent.map(c => Math.round(c * (wave1 + wave2) / 2));
+    
+    // Create complex animated gradient
+    const gradient = `
+      radial-gradient(ellipse at ${30 + Math.sin(time * 0.1) * 20}% ${40 + Math.cos(time * 0.08) * 30}%, 
+        rgba(${primary.join(', ')}, 0.4) 0%, 
+        rgba(${secondary.join(', ')}, 0.3) ${pos1}%, 
+        rgba(${accent.join(', ')}, 0.2) ${pos2}%, 
+        rgba(${primary.join(', ')}, 0.1) ${pos3}%, 
+        rgba(18, 18, 18, 0.9) 100%),
+      linear-gradient(${135 + Math.sin(time * 0.12) * 30}deg, 
+        rgba(${secondary.join(', ')}, 0.3) 0%, 
+        rgba(${primary.join(', ')}, 0.2) 50%, 
+        rgba(${accent.join(', ')}, 0.25) 100%)`;
+    
+    background.style.background = gradient;
+    
+    gradientAnimationId = requestAnimationFrame(animate);
+  };
+  
+  animate();
+  
+  console.log('🎨 Started animated gradient with colors:', {
+    primary: `rgb(${currentColors.primary.join(', ')})`,
+    secondary: `rgb(${currentColors.secondary.join(', ')})`,
+    accent: `rgb(${currentColors.accent.join(', ')})`
+  });
+}
+
+// Stop gradient animation
+function stopGradientAnimation() {
+  if (gradientAnimationId) {
+    cancelAnimationFrame(gradientAnimationId);
+    gradientAnimationId = null;
+  }
+  currentColors = null;
+  gradientPosition = 0;
+}
+
+// Set default background when no music is playing
+function setDefaultBackground() {
+  stopGradientAnimation();
+  
+  const background = document.getElementById('app-background');
+  if (background) {
+    // Clean, minimal dark background when idle
+    background.style.background = `
+      linear-gradient(135deg, 
+        rgba(18, 18, 18, 1) 0%, 
+        rgba(25, 25, 25, 1) 50%, 
+        rgba(18, 18, 18, 1) 100%)`;
+  }
+  
+  console.log('🎨 Set default background (no music playing)');
+}
+
+// Call this when music stops
+function resetBackgroundToDefault() {
+  console.log('🎨 Resetting background to default');
+  setDefaultBackground();
 }
 
 // Start progress tracking
@@ -1945,42 +2115,50 @@ function stopVisualizerAnimation() {
 
 // Logout
 function logout() {
-  // Clear tokens
-  localStorage.removeItem('spotify_access_token');
-  localStorage.removeItem('spotify_refresh_token');
-  localStorage.removeItem('spotify_token_expires');
-  localStorage.removeItem('spotify_auth_state');
-  
-  // Clear variables
-  accessToken = null;
-  refreshToken = null;
-  currentTrack = null;
-  
-  // Disconnect player
-  if (spotifyPlayer) {
-    spotifyPlayer.disconnect();
+    console.log('🔴 Logging out...');
+    
+    // Stop any ongoing background animations
+    resetBackgroundToDefault();
+    
+    // Clear Spotify player
     spotifyPlayer = null;
-  }
-  
-  // Stop animations
-  stopVisualizerAnimation();
-  stopProgressTracking();
-  if (window.backgroundInterval) {
-    clearInterval(window.backgroundInterval);
-  }
-  
-  // Update UI
-  userProfileElement.classList.add('hidden');
-  userProfileElement.classList.remove('flex');
-  loginButton.classList.remove('hidden');
-  
-  mainContentElement.classList.add('hidden');
-  authMessageElement.classList.remove('hidden');
-  
-  // Clear track data
-  shuffledTracks = [];
-  currentTrackIndex = 0;
-  updateNowPlaying(null);
+    
+    // Clear tokens
+    localStorage.removeItem('spotify_access_token');
+    localStorage.removeItem('spotify_refresh_token');
+    localStorage.removeItem('spotify_token_expires');
+    localStorage.removeItem('spotify_auth_state');
+    
+    // Clear variables
+    accessToken = null;
+    refreshToken = null;
+    currentTrack = null;
+    
+    // Disconnect player
+    if (spotifyPlayer) {
+      spotifyPlayer.disconnect();
+      spotifyPlayer = null;
+    }
+    
+    // Stop animations
+    stopVisualizerAnimation();
+    stopProgressTracking();
+    if (window.backgroundInterval) {
+      clearInterval(window.backgroundInterval);
+    }
+    
+    // Update UI
+    userProfileElement.classList.add('hidden');
+    userProfileElement.classList.remove('flex');
+    loginButton.classList.remove('hidden');
+    
+    mainContentElement.classList.add('hidden');
+    authMessageElement.classList.remove('hidden');
+    
+    // Clear track data
+    shuffledTracks = [];
+    currentTrackIndex = 0;
+    updateNowPlaying(null);
 }
 
 // Refresh access token
