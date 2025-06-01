@@ -202,8 +202,8 @@ function initialize() {
       checkExistingAuth();
     }
     
-    console.log('🎵 Initializing Spotify Web Playback SDK...');
-    initializeSpotifyPlayer();
+    // NOTE: Spotify Player initialization moved to after successful authentication
+    // This prevents 401 errors when no token is available
     
     // Initialize DOM elements once the page loads
     initializeDOMElements();
@@ -463,53 +463,10 @@ function redirectToSpotifyAuth() {
     console.log('🧹 Clearing existing tokens...');
     clearAuthTokens();
     
-    // Generate secure random state for CSRF protection
-    const state = generateRandomString(16);
-    localStorage.setItem('spotify_auth_state', state);
+    console.log('🔗 Redirecting to server login endpoint...');
     
-    // Define the required scopes for the application
-    const scopes = [
-      'user-read-private',
-      'user-read-email', 
-      'user-read-playback-state',
-      'user-modify-playback-state',
-      'user-read-currently-playing',
-      'user-library-read',
-      'user-library-modify',
-      'playlist-read-private',
-      'playlist-read-collaborative',
-      'playlist-modify-public',
-      'playlist-modify-private',
-      'streaming',
-      'user-read-recently-played',
-      'user-top-read'
-    ].join(' ');
-    
-    // Get client ID from environment or server
-    const clientId = window.SPOTIFY_CLIENT_ID || 'ENVIRONMENT_VARIABLE_REQUIRED';
-    
-    if (clientId === 'ENVIRONMENT_VARIABLE_REQUIRED') {
-      console.error('❌ Spotify Client ID not configured');
-      hideLoading();
-      alert('Spotify Client ID not configured. Please check environment variables.');
-      return;
-    }
-    
-    // Construct authorization URL
-    const redirectUri = encodeURIComponent(`${window.location.origin}/`);
-    const authUrl = `https://accounts.spotify.com/authorize?` +
-      `response_type=token&` +
-      `client_id=${clientId}&` +
-      `scope=${encodeURIComponent(scopes)}&` +
-      `redirect_uri=${redirectUri}&` +
-      `state=${state}&` +
-      `show_dialog=true`;
-    
-    console.log('🔗 Redirecting to Spotify authorization...');
-    console.log('📋 Scopes requested:', scopes.split(' '));
-    
-    // Redirect to Spotify
-    window.location.href = authUrl;
+    // Use the server's login endpoint
+    window.location.href = '/login';
     
   } catch (error) {
     console.error('❌ Error during auth redirect:', error);
@@ -525,7 +482,7 @@ function handleAuthCallback() {
   console.log('🔗 Handling auth callback...');
   console.log('🌐 Current URL hash:', window.location.hash);
   
-  // Get tokens from hash fragment
+  // Get tokens from hash fragment (server redirects with tokens in hash)
   const hashParams = new URLSearchParams(window.location.hash.substring(1));
   accessToken = hashParams.get('access_token');
   refreshToken = hashParams.get('refresh_token');
@@ -545,7 +502,9 @@ function handleAuthCallback() {
     if (refreshToken) {
       localStorage.setItem('spotify_refresh_token', refreshToken);
     }
-    localStorage.setItem('spotify_token_expires', Date.now() + (expiresIn * 1000));
+    if (expiresIn) {
+      localStorage.setItem('spotify_token_expires', Date.now() + (expiresIn * 1000));
+    }
     
     // Remove hash fragment from URL to prevent token exposure
     window.history.replaceState({}, document.title, window.location.pathname);
@@ -626,6 +585,10 @@ async function loadUserData() {
     // Show main content
     mainContentElement.classList.remove('hidden');
     authMessageElement.classList.add('hidden');
+    
+    // Initialize Spotify Player now that we have a valid token
+    console.log('🎵 Initializing Spotify Web Playback SDK...');
+    initializeSpotifyPlayer();
     
     // Create our special playlists if they don't exist
     console.log('📝 Ensuring True Shuffle playlists exist...');
@@ -1315,24 +1278,77 @@ function getShuffleDisplayName(type) {
 function initializeSpotifyPlayer() {
   console.log('🎵 Initializing Spotify Web Playback SDK...');
   
+  // Check if we have an access token
+  if (!accessToken) {
+    console.error('❌ Cannot initialize player: No access token available');
+    return;
+  }
+  
+  console.log('🔑 Access token available, proceeding with player initialization...');
+  
+  // Check if SDK is already loaded
+  if (!window.Spotify) {
+    console.log('⏳ Spotify SDK not yet loaded, waiting...');
+    // Try again in 1 second
+    setTimeout(initializeSpotifyPlayer, 1000);
+    return;
+  }
+  
   window.onSpotifyWebPlaybackSDKReady = () => {
+    console.log('🎵 Spotify Web Playback SDK is ready!');
+    
     const player = new Spotify.Player({
       name: 'True Shuffle Player',
-      getOAuthToken: cb => { cb(accessToken); },
+      getOAuthToken: async cb => { 
+        try {
+          console.log('🔑 Player requesting OAuth token...');
+          
+          // Check if current token is still valid
+          const tokenExpires = localStorage.getItem('spotify_token_expires');
+          if (accessToken && tokenExpires && Date.now() < parseInt(tokenExpires)) {
+            console.log('🔑 Using existing access token for player');
+            cb(accessToken);
+            return;
+          }
+          
+          // Try to refresh the token
+          console.log('🔄 Access token expired, attempting refresh...');
+          const refreshToken = localStorage.getItem('spotify_refresh_token');
+          
+          if (refreshToken) {
+            const refreshed = await refreshAccessToken();
+            if (refreshed && accessToken) {
+              console.log('✅ Token refreshed for player');
+              cb(accessToken);
+              return;
+            }
+          }
+          
+          // If refresh fails, use current token anyway (better than nothing)
+          console.warn('⚠️ Could not refresh token, using current token');
+          cb(accessToken);
+        } catch (error) {
+          console.error('❌ Error in getOAuthToken:', error);
+          cb(accessToken);
+        }
+      },
       volume: 0.8
     });
 
     // Error handling
     player.addListener('initialization_error', ({ message }) => {
       console.error('❌ Spotify Player initialization error:', message);
+      showNotification('Player initialization failed: ' + message, 'error');
     });
 
     player.addListener('authentication_error', ({ message }) => {
       console.error('❌ Spotify Player authentication error:', message);
+      showNotification('Authentication error: ' + message, 'error');
     });
 
     player.addListener('account_error', ({ message }) => {
       console.error('❌ Spotify Player account error:', message);
+      showNotification('Account error: ' + message, 'error');
     });
 
     player.addListener('playback_error', ({ message }) => {
@@ -1348,11 +1364,13 @@ function initializeSpotifyPlayer() {
       console.log('✅ Spotify Player ready with Device ID:', device_id);
       spotifyPlayer = player;
       deviceId = device_id;
+      showNotification('Spotify Player connected successfully!', 'success');
     });
 
     // Not Ready
     player.addListener('not_ready', ({ device_id }) => {
       console.log('⚠️ Spotify Player not ready with Device ID:', device_id);
+      showNotification('Spotify Player disconnected', 'warning');
     });
 
     // Playback status updates
@@ -1401,9 +1419,16 @@ function initializeSpotifyPlayer() {
         console.log('✅ Spotify Player connected successfully');
       } else {
         console.error('❌ Failed to connect to Spotify Player');
+        showNotification('Failed to connect to Spotify Player', 'error');
       }
     });
   };
+  
+  // If SDK is already ready, call the function immediately
+  if (window.onSpotifyWebPlaybackSDKReady) {
+    console.log('🎵 Calling SDK ready function immediately...');
+    window.onSpotifyWebPlaybackSDKReady();
+  }
 }
 
 // Toggle play/pause
@@ -2327,11 +2352,33 @@ function logout() {
 
 // Refresh access token
 async function refreshAccessToken() {
-  // In a production environment, token refresh should be handled by the server
-  // for security reasons. This is a simplified example.
-  console.log('Token expired, redirecting to login...');
-  logout();
-  showAuthMessage();
+  try {
+    console.log('🔄 Attempting to refresh access token...');
+    
+    const currentRefreshToken = localStorage.getItem('spotify_refresh_token');
+    if (!currentRefreshToken) {
+      console.log('❌ No refresh token available, redirecting to login...');
+      logout();
+      return false;
+    }
+    
+    // For simplicity, since we have Authorization Code flow, just re-login
+    // In production, you'd want a proper refresh endpoint on the server
+    console.log('ℹ️ Token refresh requires re-authentication with current setup');
+    
+    // Clear expired tokens
+    localStorage.removeItem('spotify_access_token');
+    localStorage.removeItem('spotify_token_expires');
+    
+    // Redirect to login
+    window.location.href = '/login';
+    return false;
+    
+  } catch (error) {
+    console.error('❌ Error refreshing token:', error);
+    logout();
+    return false;
+  }
 }
 
 // Generate a random string for state parameter
@@ -3029,7 +3076,7 @@ function loadUserSettings() {
     
     try {
         const savedSettings = localStorage.getItem('trueShuffleSettings');
-        if (savedSettings) {
+        if (savedSettings && savedSettings !== 'undefined' && savedSettings !== 'null') {
             const userSettings = JSON.parse(savedSettings);
             console.log('✅ User settings loaded:', userSettings);
             return { ...defaultSettings, ...userSettings };
@@ -3096,6 +3143,13 @@ function collectCurrentSettings() {
     const yearFrom = document.getElementById('year-from');
     const yearTo = document.getElementById('year-to');
     settings.yearFrom = yearFrom ? parseInt(yearFrom.value) : 1950;
+    settings.yearTo = yearTo ? parseInt(yearTo.value) : 2024;
+    
+    // Collect shuffle type from settings modal
+    const shuffleTypeSelect = document.getElementById('shuffle-type');
+    settings.shuffleType = shuffleTypeSelect ? shuffleTypeSelect.value : 'true-random';
+    
+    return settings;
 }
 
 // Show notification
@@ -3139,24 +3193,82 @@ function initializeSettings() {
 
 // Apply settings to the app
 function applySettings(settings) {
-    // Implement your settings application logic here
     console.log('⚙️ Applying settings:', settings);
+    
+    // Apply shuffle type
+    if (settings.shuffleType) {
+        currentShuffleType = settings.shuffleType;
+        
+        // Update the main shuffle type selector if it exists
+        const mainShuffleSelect = document.getElementById('shuffle-type');
+        if (mainShuffleSelect) {
+            mainShuffleSelect.value = settings.shuffleType;
+        }
+    }
 }
 
 // Load settings into the modal
 function loadSettingsIntoModal(settings) {
-    // Implement your settings loading logic here
     console.log('🔧 Loading settings into modal:', settings);
+    
+    // Load shuffle type
+    const shuffleTypeSelect = document.getElementById('shuffle-type');
+    if (shuffleTypeSelect && settings.shuffleType) {
+        shuffleTypeSelect.value = settings.shuffleType;
+    }
+    
+    // Load year range
+    const yearFrom = document.getElementById('year-from');
+    const yearTo = document.getElementById('year-to');
+    if (yearFrom && settings.yearFrom) yearFrom.value = settings.yearFrom;
+    if (yearTo && settings.yearTo) yearTo.value = settings.yearTo;
+    
+    // Load sliders
+    const popularitySlider = document.getElementById('settings-popularity');
+    const librarySlider = document.getElementById('settings-library-ratio');
+    if (popularitySlider && settings.popularity !== undefined) popularitySlider.value = settings.popularity;
+    if (librarySlider && settings.libraryRatio !== undefined) librarySlider.value = settings.libraryRatio;
+    
+    // Load toggles
+    const autoPlaylistToggle = document.getElementById('auto-playlist');
+    const backgroundToggle = document.getElementById('background-effects');
+    const skipShortToggle = document.getElementById('skip-short-tracks');
+    if (autoPlaylistToggle && settings.autoPlaylist !== undefined) autoPlaylistToggle.checked = settings.autoPlaylist;
+    if (backgroundToggle && settings.backgroundEffects !== undefined) backgroundToggle.checked = settings.backgroundEffects;
+    if (skipShortToggle && settings.skipShortTracks !== undefined) skipShortToggle.checked = settings.skipShortTracks;
 }
 
 // Setup settings modal interaction listeners
 function setupSettingsModalListeners() {
-    // Implement your settings modal interaction logic here
     console.log('✅ Settings modal interaction listeners set up');
+    
+    // Shuffle type change handler
+    const shuffleTypeSelect = document.getElementById('shuffle-type');
+    if (shuffleTypeSelect) {
+        shuffleTypeSelect.addEventListener('change', function() {
+            console.log('🔀 Shuffle type changed to:', this.value);
+            currentShuffleType = this.value;
+        });
+    }
 }
 
 // Reset user settings
 function resetUserSettings() {
-    // Implement your reset settings logic here
     console.log('🔄 Resetting user settings');
+    
+    try {
+        // Reset to default settings
+        localStorage.setItem('trueShuffleSettings', JSON.stringify(defaultSettings));
+        
+        // Load defaults into modal
+        loadSettingsIntoModal(defaultSettings);
+        
+        // Apply default settings
+        applySettings(defaultSettings);
+        
+        showNotification('Settings reset to defaults', 'success');
+    } catch (error) {
+        console.error('❌ Error resetting settings:', error);
+        showNotification('Failed to reset settings', 'error');
+    }
 }
