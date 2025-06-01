@@ -196,11 +196,7 @@ async function initialize() {
         initializeDOMElements();
         
         // Initialize enhanced settings system
-        if (typeof initializeEnhancedSettings === 'function') {
-            console.log('⚙️ Initializing enhanced settings...');
-            await initializeEnhancedSettings();
-            setupEnhancedSettingsListeners();
-        }
+        await initializeSettings();
         
         // Initialize monetization system
         if (typeof window.monetization !== 'undefined') {
@@ -253,14 +249,20 @@ async function initialize() {
             // Don't show onboarding yet, wait until after auth
         }
         
+        // Set up user data loading
+        currentUserId = checkExistingAuth();
+        if (currentUserId) {
+            await loadUserData();
+        }
+        
+        console.log('✅ App initialization complete');
+        
     } catch (error) {
-        console.error('❌ Error during initialization:', error);
+        console.error('❌ Initialization error:', error);
         showAuthMessage();
     } finally {
         hideLoading();
     }
-    
-    console.log('✅ App initialization complete');
 }
 
 // Enhanced settings initialization
@@ -1139,15 +1141,18 @@ function getDateRange() {
 }
 
 async function fetchTrulyRandomTracks() {
-    console.log('🎲 Fetching truly random tracks...');
+    console.log('🎲 Fetching truly random tracks with best practices...');
     
     // Get current settings
-    const userSettings = await loadUserSettings();
+    const userSettings = settingsManager ? settingsManager.getSettings() : await loadUserSettings();
     console.log('🔧 Using settings for track search:', {
         genres: userSettings.genres,
         moods: userSettings.moods,
+        languages: userSettings.languages,
         yearFrom: userSettings.yearFrom,
-        yearTo: userSettings.yearTo
+        yearTo: userSettings.yearTo,
+        popularity: userSettings.popularity,
+        explicitContent: userSettings.explicitContent
     });
     
     try {
@@ -1155,131 +1160,334 @@ async function fetchTrulyRandomTracks() {
         const usedTrackIds = new Set();
         const maxResults = 50;
         
-        // Strategy 1: Random character searches but with better distribution
-        const consonants = ['b', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'r', 's', 't', 'w'];
-        const vowels = ['a', 'e', 'i', 'o', 'u'];
+        // Best Practice: Use Spotify's recommendation engine with random seeds
+        // This is more effective than search-based randomization
         
-        // Strategy 2: Random year searches for broader discovery
-        const currentYear = new Date().getFullYear();
-        const randomYears = [];
-        for (let i = 0; i < 5; i++) {
-            randomYears.push(1950 + Math.floor(Math.random() * (currentYear - 1950)));
+        // Strategy 1: Random track recommendations
+        const randomRecommendations = await fetchRandomRecommendations(userSettings);
+        if (randomRecommendations.length > 0) {
+            allTracks.push(...randomRecommendations.slice(0, 20));
+            randomRecommendations.forEach(track => usedTrackIds.add(track.id));
         }
         
-        // Strategy 3: Wildcard searches with random offsets
-        const wildcardSearches = [
-            '*', // Wildcard for any track
-            'the', 'of', 'to', 'and', 'in', 'is', 'you', 'that', 'it', 'he', 'was', 'for', 'on', 'are', 'as', 'with', 'his', 'they', 'i', 'at', 'be', 'this', 'have', 'from', 'or', 'one', 'had', 'by', 'words'
-        ];
-        
-        // Combine all search strategies
-        const allSearches = [
-            ...consonants.map(c => c),
-            ...vowels.map(v => v),
-            ...randomYears.map(y => `year:${y}`),
-            ...wildcardSearches
-        ];
-        
-        // Shuffle all searches
-        const shuffledSearches = [...allSearches].sort(() => Math.random() - 0.5);
-        
-        for (let i = 0; i < Math.min(20, shuffledSearches.length) && allTracks.length < maxResults; i++) {
-            const baseSearch = shuffledSearches[i];
-            
-            // Build search query with settings
-            let searchQuery = baseSearch;
-            
-            // Apply year filter from settings if specified (overrides random year strategy)
-            if (userSettings.yearFrom && userSettings.yearTo && !baseSearch.includes('year:')) {
-                if (userSettings.yearFrom === userSettings.yearTo) {
-                    searchQuery += ` year:${userSettings.yearFrom}`;
-                } else {
-                    searchQuery += ` year:${userSettings.yearFrom}-${userSettings.yearTo}`;
-                }
-                console.log(`📅 Applied year filter: ${userSettings.yearFrom}-${userSettings.yearTo}`);
-            }
-            
-            // Apply genre filter from settings if user has selected any
-            if (userSettings.genres && userSettings.genres.length > 0) {
-                const randomGenre = userSettings.genres[Math.floor(Math.random() * userSettings.genres.length)];
-                searchQuery += ` genre:"${randomGenre}"`;
-                console.log(`🎵 Applied genre filter: ${randomGenre}`);
-            }
-            
-            try {
-                // Use much larger random offsets for better distribution
-                const randomOffset = Math.floor(Math.random() * 1000);
-                
-                console.log(`🔍 Searching: "${searchQuery}" (offset: ${randomOffset})`);
-                
-                const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=track&limit=50&offset=${randomOffset}`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log(`📊 Search "${baseSearch}" returned ${data.tracks.items.length} tracks`);
-                    
-                    const validTracks = data.tracks.items.filter(track => {
-                        if (usedTrackIds.has(track.id)) return false; // No duplicates
-                        
-                        // Basic quality filters
-                        const albumName = track.album.name.toLowerCase();
-                        const trackName = track.name.toLowerCase();
-                        
-                        // Filter out obvious compilation/karaoke tracks
-                        if (albumName.includes('hits') || 
-                            albumName.includes('best of') || 
-                            albumName.includes('greatest') ||
-                            albumName.includes('collection') ||
-                            albumName.includes('karaoke') ||
-                            albumName.includes('tribute') ||
-                            trackName.includes('karaoke') ||
-                            trackName.includes('cover version')) {
-                            return false;
-                        }
-                        
-                        return true;
-                    });
-                    
-                    // Add tracks randomly to avoid bias toward first results
-                    const shuffledValidTracks = [...validTracks].sort(() => Math.random() - 0.5);
-                    
-                    for (const track of shuffledValidTracks) {
-                        if (allTracks.length >= maxResults) break;
-                        allTracks.push(track);
-                        usedTrackIds.add(track.id);
-                    }
-                } else {
-                    console.warn(`⚠️ Search failed for "${baseSearch}":`, response.status);
-                }
-                
-                // Small delay to avoid rate limiting
-                await new Promise(resolve => setTimeout(resolve, 50));
-                
-            } catch (error) {
-                console.error(`❌ Error searching for "${baseSearch}":`, error);
-            }
+        // Strategy 2: Random search with better distribution
+        if (allTracks.length < maxResults) {
+            const searchResults = await fetchRandomSearchResults(userSettings, usedTrackIds);
+            allTracks.push(...searchResults);
         }
         
-        console.log(`✅ Found ${allTracks.length} tracks with current settings`);
+        // Strategy 3: Random album exploration
+        if (allTracks.length < maxResults) {
+            const albumResults = await fetchRandomAlbumTracks(userSettings, usedTrackIds);
+            allTracks.push(...albumResults);
+        }
+        
+        // Filter by settings
+        const filteredTracks = filterTracksBySettings(allTracks, userSettings);
+        
+        console.log(`✅ Found ${filteredTracks.length} tracks with current settings`);
         
         // Log a sample of what we found for verification
-        if (allTracks.length > 0) {
-            console.log('📋 Sample tracks found:', allTracks.slice(0, 3).map(t => ({
+        if (filteredTracks.length > 0) {
+            console.log('📋 Sample tracks found:', filteredTracks.slice(0, 3).map(t => ({
                 name: t.name,
                 artist: t.artists[0].name,
                 year: t.album.release_date,
-                genres: t.genres || 'N/A'
+                popularity: t.popularity,
+                explicit: t.explicit
             })));
         }
         
-        return allTracks;
+        return filteredTracks.slice(0, maxResults);
         
     } catch (error) {
         console.error('❌ Error in fetchTrulyRandomTracks:', error);
         return [];
     }
+}
+
+// Best Practice: Use Spotify's recommendation engine for true randomness
+async function fetchRandomRecommendations(userSettings) {
+    console.log('🎯 Fetching random recommendations...');
+    
+    try {
+        // Generate random seed values for recommendation diversity
+        const seedGenres = userSettings.genres.length > 0 ? 
+            getRandomItems(userSettings.genres, Math.min(3, userSettings.genres.length)) :
+            getRandomItems(['pop', 'rock', 'hip-hop', 'electronic', 'jazz', 'indie', 'alternative', 'folk'], 3);
+        
+        // Random audio feature targets for diversity
+        const audioFeatures = {
+            target_danceability: Math.random(),
+            target_energy: Math.random(),
+            target_valence: Math.random(),
+            target_acousticness: Math.random(),
+            target_instrumentalness: Math.random() * 0.7, // Favor songs with vocals
+            target_popularity: userSettings.popularity || 70
+        };
+        
+        // Build recommendation query
+        const params = new URLSearchParams({
+            seed_genres: seedGenres.join(','),
+            limit: 50,
+            market: 'US', // Can be made dynamic based on user location
+            ...audioFeatures
+        });
+        
+        console.log('🔍 Recommendation params:', params.toString());
+        
+        const response = await fetch(`https://api.spotify.com/v1/recommendations?${params}`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log(`🎯 Found ${data.tracks.length} recommendation tracks`);
+            return data.tracks;
+        } else {
+            console.warn(`⚠️ Recommendations failed: ${response.status}`);
+            return [];
+        }
+        
+    } catch (error) {
+        console.error('❌ Error fetching recommendations:', error);
+        return [];
+    }
+}
+
+// Enhanced random search with better strategies
+async function fetchRandomSearchResults(userSettings, usedTrackIds) {
+    console.log('🔍 Fetching random search results...');
+    
+    const tracks = [];
+    const searchStrategies = [
+        // Random year searches
+        () => `year:${1950 + Math.floor(Math.random() * (2024 - 1950))}`,
+        
+        // Random decade searches
+        () => {
+            const decades = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s'];
+            return `decade:${getRandomItems(decades, 1)[0]}`;
+        },
+        
+        // Random genre + year combinations
+        () => {
+            const allGenres = ['pop', 'rock', 'hip-hop', 'electronic', 'jazz', 'classical', 'country', 'reggae', 'blues', 'folk', 'indie', 'alternative', 'metal', 'punk', 'soul', 'funk'];
+            const genre = getRandomItems(allGenres, 1)[0];
+            const year = 1950 + Math.floor(Math.random() * (2024 - 1950));
+            return `genre:${genre} year:${year}`;
+        },
+        
+        // Random musical keys
+        () => {
+            const keys = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+            const modes = ['major', 'minor'];
+            return `key:${getRandomItems(keys, 1)[0]} mode:${getRandomItems(modes, 1)[0]}`;
+        },
+        
+        // Random tempo ranges
+        () => {
+            const tempos = ['slow', 'medium', 'fast', 'ballad', 'upbeat'];
+            return `tempo:${getRandomItems(tempos, 1)[0]}`;
+        }
+    ];
+    
+    // Apply user language filter if specified
+    let languageQuery = '';
+    if (userSettings.languages && userSettings.languages.length > 0) {
+        // Spotify doesn't have direct language filtering, so we'll use market-based filtering
+        const languageMarkets = {
+            'en': ['US', 'GB', 'CA', 'AU'],
+            'es': ['ES', 'MX', 'AR', 'CO'],
+            'fr': ['FR', 'CA', 'BE'],
+            'de': ['DE', 'AT', 'CH'],
+            'it': ['IT'],
+            'pt': ['BR', 'PT'],
+            'ja': ['JP'],
+            'ko': ['KR']
+        };
+        
+        const userLang = userSettings.languages[0];
+        if (languageMarkets[userLang]) {
+            const markets = languageMarkets[userLang];
+            languageQuery = ` market:${getRandomItems(markets, 1)[0]}`;
+        }
+    }
+    
+    // Execute random searches
+    for (let i = 0; i < 3 && tracks.length < 20; i++) {
+        try {
+            const strategy = getRandomItems(searchStrategies, 1)[0];
+            let searchQuery = strategy() + languageQuery;
+            
+            // Apply user year filter if specified
+            if (userSettings.yearFrom && userSettings.yearTo) {
+                if (userSettings.yearFrom === userSettings.yearTo) {
+                    searchQuery += ` year:${userSettings.yearFrom}`;
+                } else {
+                    searchQuery += ` year:${userSettings.yearFrom}-${userSettings.yearTo}`;
+                }
+            }
+            
+            // Random offset for diversity
+            const randomOffset = Math.floor(Math.random() * 1000);
+            
+            console.log(`🔍 Random search: "${searchQuery}" (offset: ${randomOffset})`);
+            
+            const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=track&limit=50&offset=${randomOffset}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const validTracks = data.tracks.items.filter(track => 
+                    !usedTrackIds.has(track.id) && isValidTrack(track, userSettings)
+                );
+                
+                // Shuffle results and add randomly
+                const shuffledTracks = fisherYatesShuffle([...validTracks]);
+                tracks.push(...shuffledTracks.slice(0, 7));
+                shuffledTracks.slice(0, 7).forEach(track => usedTrackIds.add(track.id));
+            }
+            
+            // Small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+        } catch (error) {
+            console.error('❌ Random search error:', error);
+        }
+    }
+    
+    return tracks;
+}
+
+// Random album exploration for discovery
+async function fetchRandomAlbumTracks(userSettings, usedTrackIds) {
+    console.log('💽 Fetching random album tracks...');
+    
+    const tracks = [];
+    
+    try {
+        // Search for random albums
+        const albumQueries = [
+            `year:${1950 + Math.floor(Math.random() * (2024 - 1950))}`,
+            'genre:' + getRandomItems(['pop', 'rock', 'electronic', 'jazz', 'indie'], 1)[0]
+        ];
+        
+        for (const query of albumQueries) {
+            try {
+                const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=album&limit=20&offset=${Math.floor(Math.random() * 500)}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const randomAlbums = getRandomItems(data.albums.items, 2);
+                    
+                    for (const album of randomAlbums) {
+                        // Get random tracks from this album
+                        const albumResponse = await fetch(`https://api.spotify.com/v1/albums/${album.id}/tracks?limit=50`, {
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        });
+                        
+                        if (albumResponse.ok) {
+                            const albumData = await albumResponse.json();
+                            const randomTracks = getRandomItems(albumData.items, 3)
+                                .filter(track => !usedTrackIds.has(track.id))
+                                .map(track => ({
+                                    ...track,
+                                    album: album, // Add album info
+                                    popularity: album.popularity || 50
+                                }));
+                            
+                            tracks.push(...randomTracks);
+                            randomTracks.forEach(track => usedTrackIds.add(track.id));
+                        }
+                        
+                        if (tracks.length >= 15) break;
+                    }
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 50));
+                
+            } catch (error) {
+                console.error('❌ Album search error:', error);
+            }
+        }
+        
+    } catch (error) {
+        console.error('❌ Error in album exploration:', error);
+    }
+    
+    return tracks.slice(0, 15);
+}
+
+// Filter tracks by user settings
+function filterTracksBySettings(tracks, userSettings) {
+    return tracks.filter(track => {
+        // Filter by popularity
+        if (userSettings.popularity && track.popularity > userSettings.popularity) {
+            return false;
+        }
+        
+        // Filter by explicit content
+        if (!userSettings.explicitContent && track.explicit) {
+            return false;
+        }
+        
+        // Filter by track duration
+        if (userSettings.trackDurationMin && track.duration_ms < userSettings.trackDurationMin * 1000) {
+            return false;
+        }
+        
+        if (userSettings.trackDurationMax && track.duration_ms > userSettings.trackDurationMax * 1000) {
+            return false;
+        }
+        
+        // Basic quality filters
+        const albumName = track.album.name.toLowerCase();
+        const trackName = track.name.toLowerCase();
+        
+        if (albumName.includes('karaoke') || 
+            albumName.includes('tribute') ||
+            albumName.includes('cover') ||
+            trackName.includes('karaoke') ||
+            trackName.includes('cover version') ||
+            trackName.includes('backing track')) {
+            return false;
+        }
+        
+        return true;
+    });
+}
+
+// Check if track is valid based on settings
+function isValidTrack(track, userSettings) {
+    // Basic validation
+    if (!track || !track.id || !track.name || !track.artists || track.artists.length === 0) {
+        return false;
+    }
+    
+    // Filter by popularity
+    if (userSettings.popularity && track.popularity > userSettings.popularity) {
+        return false;
+    }
+    
+    // Filter by explicit content
+    if (!userSettings.explicitContent && track.explicit) {
+        return false;
+    }
+    
+    return true;
+}
+
+// Utility function to get random items from array
+function getRandomItems(array, count) {
+    if (!array || array.length === 0) return [];
+    if (count >= array.length) return [...array];
+    
+    const shuffled = fisherYatesShuffle([...array]);
+    return shuffled.slice(0, count);
 }
 
 // Try fetching tracks by generating random Spotify track IDs
@@ -3720,23 +3928,416 @@ function isFirstTimeUser() {
 // User data storage
 let currentUserId = null;
 
-// Default settings configuration - SIMPLIFIED
+// Enhanced default settings configuration for production
 const defaultSettings = {
+    // Core Music Preferences
     genres: [], // User selected genres
     moods: [],  // User selected moods
+    languages: ['en'], // Language filtering (ISO codes)
     yearFrom: 1950, // Year range start
     yearTo: 2024,   // Year range end
-    shuffleType: 'true-random' // Keep shuffle type as it's core functionality
+    shuffleType: 'true-random', // Core shuffle algorithm
+    
+    // Audio & Discovery Settings
+    popularity: 70, // 0-100, lower = more underground music
+    explicitContent: true, // Allow explicit content
+    trackDurationMin: 30, // Minimum track length in seconds
+    trackDurationMax: 600, // Maximum track length in seconds (10 min)
+    
+    // Advanced Discovery
+    repeatProtection: 'session', // 'none', 'session', 'persistent'
+    genreDiversity: 0.7, // 0-1, higher = more genre mixing
+    moodAdaptation: true, // Adapt to listening patterns
+    
+    // App Behavior
+    autoAdvance: true, // Auto-play next track
+    crossfade: false, // Crossfade between tracks
+    volumeNormalization: false, // Normalize volume levels
+    
+    // UI Preferences  
+    darkMode: true,
+    compactMode: false,
+    showLyrics: false,
+    showQueue: true,
+    
+    // Privacy & Data
+    saveListeningHistory: true,
+    shareData: false,
+    analyticsEnabled: true
 };
+
+// Production settings management class
+class ProductionSettingsManager {
+    constructor() {
+        this.settings = { ...defaultSettings };
+        this.isLoaded = false;
+        this.saveDebounceTimer = null;
+        this.validationErrors = [];
+    }
+
+    async init() {
+        console.log('⚙️ Initializing Production Settings Manager...');
+        
+        try {
+            await this.loadSettings();
+            this.validateSettings();
+            this.applySettings();
+            this.setupAutoSave();
+            this.isLoaded = true;
+            
+            console.log('✅ Settings Manager initialized successfully');
+            return true;
+        } catch (error) {
+            console.error('❌ Settings Manager initialization failed:', error);
+            this.settings = { ...defaultSettings };
+            return false;
+        }
+    }
+
+    async loadSettings() {
+        console.log('📖 Loading user settings...');
+        
+        // Try multiple sources in order of preference
+        const sources = [
+            () => this.loadFromServer(),
+            () => this.loadFromLocalStorage(),
+            () => this.loadFromDefaults()
+        ];
+
+        for (const loadSource of sources) {
+            try {
+                const settings = await loadSource();
+                if (settings && this.validateSettings(settings)) {
+                    this.settings = { ...defaultSettings, ...settings };
+                    console.log('✅ Settings loaded successfully');
+                    return;
+                }
+            } catch (error) {
+                console.warn('⚠️ Settings load source failed:', error);
+                continue;
+            }
+        }
+
+        throw new Error('All settings sources failed');
+    }
+
+    async loadFromServer() {
+        if (!currentUserId) return null;
+        
+        const response = await fetch(`/api/settings/${currentUserId}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const serverSettings = await response.json();
+            console.log('✅ Settings loaded from server');
+            return serverSettings;
+        }
+
+        throw new Error(`Server load failed: ${response.status}`);
+    }
+
+    loadFromLocalStorage() {
+        const saved = localStorage.getItem('trueShuffleSettings');
+        if (saved && saved !== 'undefined' && saved !== 'null') {
+            const localSettings = JSON.parse(saved);
+            console.log('✅ Settings loaded from localStorage');
+            return localSettings;
+        }
+        return null;
+    }
+
+    loadFromDefaults() {
+        console.log('🔧 Using default settings');
+        return defaultSettings;
+    }
+
+    validateSettings(settings = this.settings) {
+        this.validationErrors = [];
+
+        // Validate year range
+        if (settings.yearFrom > settings.yearTo) {
+            this.validationErrors.push('Year range invalid: start year cannot be after end year');
+            settings.yearFrom = defaultSettings.yearFrom;
+            settings.yearTo = defaultSettings.yearTo;
+        }
+
+        // Validate arrays
+        if (!Array.isArray(settings.genres)) {
+            this.validationErrors.push('Genres must be an array');
+            settings.genres = defaultSettings.genres;
+        }
+
+        if (!Array.isArray(settings.moods)) {
+            this.validationErrors.push('Moods must be an array');
+            settings.moods = defaultSettings.moods;
+        }
+
+        if (!Array.isArray(settings.languages)) {
+            this.validationErrors.push('Languages must be an array');
+            settings.languages = defaultSettings.languages;
+        }
+
+        // Validate numeric ranges
+        if (settings.popularity < 0 || settings.popularity > 100) {
+            this.validationErrors.push('Popularity must be between 0-100');
+            settings.popularity = defaultSettings.popularity;
+        }
+
+        if (settings.genreDiversity < 0 || settings.genreDiversity > 1) {
+            this.validationErrors.push('Genre diversity must be between 0-1');
+            settings.genreDiversity = defaultSettings.genreDiversity;
+        }
+
+        // Validate language codes (basic ISO 639-1 check)
+        const validLanguages = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ja', 'ko', 'zh', 'ar', 'hi', 'sv', 'no', 'da', 'nl', 'pl', 'tr'];
+        settings.languages = settings.languages.filter(lang => validLanguages.includes(lang));
+        if (settings.languages.length === 0) {
+            settings.languages = ['en'];
+        }
+
+        if (this.validationErrors.length > 0) {
+            console.warn('⚠️ Settings validation errors:', this.validationErrors);
+            this.showNotification('Some settings were corrected due to invalid values', 'warning');
+        }
+
+        return this.validationErrors.length === 0;
+    }
+
+    async saveSettings() {
+        console.log('💾 Saving settings...');
+        
+        // Validate before saving
+        if (!this.validateSettings()) {
+            console.error('❌ Cannot save invalid settings');
+            return false;
+        }
+
+        try {
+            // Try server first if logged in
+            if (currentUserId) {
+                try {
+                    await this.saveToServer();
+                    this.showNotification('Settings saved to your account', 'success');
+                } catch (error) {
+                    console.warn('⚠️ Server save failed, using localStorage:', error);
+                    await this.saveToLocalStorage();
+                    this.showNotification('Settings saved locally (server unavailable)', 'warning');
+                }
+            } else {
+                await this.saveToLocalStorage();
+                this.showNotification('Settings saved locally', 'info');
+            }
+
+            // Apply settings immediately
+            this.applySettings();
+            
+            // Trigger settings updated event
+            window.dispatchEvent(new CustomEvent('settingsUpdated', { 
+                detail: this.settings 
+            }));
+
+            return true;
+
+        } catch (error) {
+            console.error('❌ Save failed:', error);
+            this.showNotification('Failed to save settings', 'error');
+            return false;
+        }
+    }
+
+    async saveToServer() {
+        const response = await fetch(`/api/settings/${currentUserId}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                settings: this.settings,
+                timestamp: Date.now(),
+                version: '2.1'
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Server save failed: ${response.status}`);
+        }
+
+        console.log('✅ Settings saved to server');
+    }
+
+    async saveToLocalStorage() {
+        localStorage.setItem('trueShuffleSettings', JSON.stringify({
+            settings: this.settings,
+            timestamp: Date.now(),
+            version: '2.1'
+        }));
+        console.log('✅ Settings saved to localStorage');
+    }
+
+    applySettings() {
+        console.log('🔧 Applying settings to app...');
+
+        // Apply to global variables for backward compatibility
+        currentShuffleType = this.settings.shuffleType;
+        selectedGenres = this.settings.genres;
+        selectedMood = this.settings.moods[0] || null;
+        
+        // Apply to window for module access
+        window.userSettings = this.settings;
+        window.selectedGenres = this.settings.genres;
+        window.selectedMood = this.settings.moods[0] || null;
+        window.userYearFrom = this.settings.yearFrom;
+        window.userYearTo = this.settings.yearTo;
+        window.userLanguages = this.settings.languages;
+
+        // Apply UI settings
+        this.applyUISettings();
+        
+        // Update settings modal if open
+        this.updateSettingsModal();
+
+        console.log('✅ Settings applied successfully');
+    }
+
+    applyUISettings() {
+        // Apply dark mode
+        if (this.settings.darkMode) {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
+        }
+
+        // Apply compact mode
+        if (this.settings.compactMode) {
+            document.body.classList.add('compact-mode');
+        } else {
+            document.body.classList.remove('compact-mode');
+        }
+    }
+
+    updateSettingsModal() {
+        const modal = document.getElementById('settings-modal');
+        if (!modal || !modal.classList.contains('visible')) return;
+
+        // Update all form elements with current settings
+        this.loadSettingsIntoModal();
+    }
+
+    collectCurrentSettings() {
+        const settings = { ...this.settings };
+        
+        try {
+            // Collect from UI elements
+            const genreButtons = document.querySelectorAll('.settings-genre-btn.active');
+            settings.genres = Array.from(genreButtons).map(btn => btn.dataset.genre);
+            
+            const moodOptions = document.querySelectorAll('.settings-mood-option.active');
+            settings.moods = Array.from(moodOptions).map(option => option.dataset.mood);
+
+            const languageSelect = document.getElementById('language-select');
+            if (languageSelect) {
+                settings.languages = Array.from(languageSelect.selectedOptions).map(option => option.value);
+            }
+            
+            const yearFrom = document.getElementById('year-from');
+            const yearTo = document.getElementById('year-to');
+            if (yearFrom) settings.yearFrom = parseInt(yearFrom.value) || defaultSettings.yearFrom;
+            if (yearTo) settings.yearTo = parseInt(yearTo.value) || defaultSettings.yearTo;
+            
+            const shuffleTypeSelect = document.getElementById('shuffle-type');
+            if (shuffleTypeSelect) settings.shuffleType = shuffleTypeSelect.value;
+
+            // Collect other settings
+            const popularitySlider = document.getElementById('popularity-slider');
+            if (popularitySlider) settings.popularity = parseInt(popularitySlider.value);
+
+            const explicitCheckbox = document.getElementById('explicit-content');
+            if (explicitCheckbox) settings.explicitContent = explicitCheckbox.checked;
+
+            console.log('📊 Collected current settings:', settings);
+            
+        } catch (error) {
+            console.error('❌ Error collecting settings:', error);
+        }
+
+        return settings;
+    }
+
+    setupAutoSave() {
+        // Debounced auto-save when settings change
+        const autoSave = () => {
+            if (this.saveDebounceTimer) {
+                clearTimeout(this.saveDebounceTimer);
+            }
+            this.saveDebounceTimer = setTimeout(() => {
+                this.settings = this.collectCurrentSettings();
+                this.saveSettings();
+            }, 1000); // Save 1 second after last change
+        };
+
+        // Listen for form changes in settings modal
+        document.addEventListener('change', (e) => {
+            if (e.target.closest('#settings-modal')) {
+                autoSave();
+            }
+        });
+
+        // Listen for custom settings events
+        window.addEventListener('settingsChanged', autoSave);
+    }
+
+    showNotification(message, type = 'info') {
+        if (typeof showNotification === 'function') {
+            showNotification(message, type);
+        } else {
+            console.log(`${type.toUpperCase()}: ${message}`);
+        }
+    }
+
+    // Public API methods
+    getSetting(key) {
+        return this.settings[key];
+    }
+
+    setSetting(key, value) {
+        this.settings[key] = value;
+        this.validateSettings();
+        this.applySettings();
+    }
+
+    getSettings() {
+        return { ...this.settings };
+    }
+
+    resetToDefaults() {
+        this.settings = { ...defaultSettings };
+        this.applySettings();
+        this.saveSettings();
+        this.showNotification('Settings reset to defaults', 'info');
+    }
+}
+
+// Global settings manager instance
+let settingsManager = null;
 
 // Show settings modal
 function showSettingsModal() {
     const settingsModal = document.getElementById('settings-modal');
     if (settingsModal) {
         // Load current settings into modal
-        loadUserSettings().then(currentSettings => {
-            loadSettingsIntoModal(currentSettings);
-        });
+        if (settingsManager && settingsManager.isLoaded) {
+            loadSettingsIntoModal(settingsManager.getSettings());
+        } else {
+            // Fallback for legacy support
+            loadUserSettings().then(currentSettings => {
+                loadSettingsIntoModal(currentSettings);
+            });
+        }
         
         // Show modal
         settingsModal.classList.remove('hidden');
@@ -3759,11 +4360,15 @@ function hideSettingsModal() {
     }
 }
 
-// Load user settings - SIMPLIFIED
+// Load user settings - Updated to use ProductionSettingsManager
 async function loadUserSettings() {
-    console.log('📖 Loading user settings...');
+    if (settingsManager && settingsManager.isLoaded) {
+        return settingsManager.getSettings();
+    }
     
-    // Try localStorage first
+    // Legacy fallback
+    console.log('📖 Loading user settings (legacy mode)...');
+    
     try {
         const savedSettings = localStorage.getItem('trueShuffleSettings');
         if (savedSettings && savedSettings !== 'undefined' && savedSettings !== 'null') {
@@ -3779,97 +4384,111 @@ async function loadUserSettings() {
     return defaultSettings;
 }
 
-// Save user settings - SIMPLIFIED
+// Save user settings - Updated to use ProductionSettingsManager
 async function saveUserSettings() {
-    console.log('💾 Saving user settings...');
+    if (settingsManager && settingsManager.isLoaded) {
+        settingsManager.settings = settingsManager.collectCurrentSettings();
+        return await settingsManager.saveSettings();
+    }
+    
+    // Legacy fallback
+    console.log('💾 Saving user settings (legacy mode)...');
     
     try {
         const settings = collectCurrentSettings();
         
-        // Save to localStorage
         localStorage.setItem('trueShuffleSettings', JSON.stringify(settings));
         console.log('✅ Settings saved to localStorage:', settings);
         showNotification('Settings saved successfully!', 'success');
         
-        // Apply settings immediately
         applySettings(settings);
+        return true;
         
     } catch (error) {
         console.error('❌ Error saving settings:', error);
         showNotification('Failed to save settings', 'error');
+        return false;
     }
 }
 
-// Collect current settings from UI - SIMPLIFIED
+// Collect current settings from UI - Enhanced for production
 function collectCurrentSettings() {
+    if (settingsManager && settingsManager.isLoaded) {
+        return settingsManager.collectCurrentSettings();
+    }
+    
+    // Legacy collection
     const settings = {};
     
-    // Collect selected genres
-    const genreButtons = document.querySelectorAll('.settings-genre-btn.active');
-    settings.genres = Array.from(genreButtons).map(btn => btn.dataset.genre);
+    try {
+        // Collect selected genres
+        const genreButtons = document.querySelectorAll('.settings-genre-btn.active');
+        settings.genres = Array.from(genreButtons).map(btn => btn.dataset.genre);
+        
+        // Collect selected moods
+        const moodOptions = document.querySelectorAll('.settings-mood-option.active');
+        settings.moods = Array.from(moodOptions).map(option => option.dataset.mood);
+        
+        // Collect languages
+        const languageSelect = document.getElementById('language-select');
+        if (languageSelect) {
+            settings.languages = Array.from(languageSelect.selectedOptions).map(option => option.value);
+        } else {
+            settings.languages = ['en']; // Default to English
+        }
+        
+        // Collect year range
+        const yearFrom = document.getElementById('year-from');
+        const yearTo = document.getElementById('year-to');
+        settings.yearFrom = yearFrom ? parseInt(yearFrom.value) : 1950;
+        settings.yearTo = yearTo ? parseInt(yearTo.value) : 2024;
+        
+        // Collect shuffle type
+        const shuffleTypeSelect = document.getElementById('shuffle-type');
+        settings.shuffleType = shuffleTypeSelect ? shuffleTypeSelect.value : 'true-random';
+        
+        // Collect popularity setting
+        const popularitySlider = document.getElementById('popularity-slider');
+        settings.popularity = popularitySlider ? parseInt(popularitySlider.value) : 70;
+        
+        // Collect explicit content setting
+        const explicitCheckbox = document.getElementById('explicit-content');
+        settings.explicitContent = explicitCheckbox ? explicitCheckbox.checked : true;
+        
+        console.log('📊 Collected settings:', settings);
+        
+    } catch (error) {
+        console.error('❌ Error collecting settings:', error);
+    }
     
-    // Collect selected moods
-    const moodOptions = document.querySelectorAll('.settings-mood-option.active');
-    settings.moods = Array.from(moodOptions).map(option => option.dataset.mood);
-    
-    // Collect year range
-    const yearFrom = document.getElementById('year-from');
-    const yearTo = document.getElementById('year-to');
-    settings.yearFrom = yearFrom ? parseInt(yearFrom.value) : 1950;
-    settings.yearTo = yearTo ? parseInt(yearTo.value) : 2024;
-    
-    // Collect shuffle type
-    const shuffleTypeSelect = document.getElementById('shuffle-type');
-    settings.shuffleType = shuffleTypeSelect ? shuffleTypeSelect.value : 'true-random';
-    
-    console.log('📊 Collected settings:', settings);
     return settings;
 }
 
-// Show notification
-function showNotification(message, type = 'info') {
-    const container = document.getElementById('notification-container');
-    if (!container) return;
-    
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    
-    const icon = type === 'success' ? 'check' : type === 'error' ? 'exclamation-triangle' : 'info-circle';
-    
-    notification.innerHTML = `
-        <div class="notification-content">
-            <i class="fas fa-${icon}"></i>
-            <div class="notification-text">${message}</div>
-        </div>
-    `;
-    
-    container.appendChild(notification);
-    
-    // Show notification
-    setTimeout(() => notification.classList.add('visible'), 100);
-    
-    // Auto-hide after 3 seconds
-    setTimeout(() => {
-        notification.classList.remove('visible');
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
-}
-
-// Initialize settings system
+// Initialize settings system - Updated for production
 async function initializeSettings() {
     console.log('⚙️ Initializing settings system...');
     
-    // Load user settings
+    try {
+        // Initialize production settings manager
+        settingsManager = new ProductionSettingsManager();
+        const success = await settingsManager.init();
+        
+        if (success) {
+            console.log('✅ Production settings system initialized');
+            return;
+        }
+    } catch (error) {
+        console.error('❌ Production settings initialization failed:', error);
+    }
+    
+    // Fallback to legacy settings
+    console.log('⚠️ Using legacy settings system');
     const userSettings = await loadUserSettings();
-    
-    // Apply settings to the app
-    console.log('⚙️ Applying settings:', userSettings);
     applySettings(userSettings);
-    
-    console.log('✅ Settings system initialized');
+    console.log('✅ Legacy settings system initialized');
 }
 
-// Apply settings to the app - SIMPLIFIED
+// Apply settings to the app - Enhanced for production
 function applySettings(settings) {
     console.log('⚙️ Applying settings:', settings);
     
@@ -3879,7 +4498,7 @@ function applySettings(settings) {
         console.log('🔀 Shuffle type set to:', currentShuffleType);
     }
     
-    // Store genres globally for track fetching functions
+    // Store settings globally for track fetching functions
     if (settings.genres) {
         selectedGenres = settings.genres;
         window.selectedGenres = settings.genres;
@@ -3900,6 +4519,23 @@ function applySettings(settings) {
         console.log('📅 Year range set to:', settings.yearFrom, '-', settings.yearTo);
     }
     
+    // Store language preferences globally
+    if (settings.languages) {
+        window.userLanguages = settings.languages;
+        console.log('🌍 Languages set to:', settings.languages);
+    }
+    
+    // Store other settings
+    if (typeof settings.popularity !== 'undefined') {
+        window.userPopularity = settings.popularity;
+        console.log('⭐ Popularity threshold set to:', settings.popularity);
+    }
+    
+    if (typeof settings.explicitContent !== 'undefined') {
+        window.userExplicitContent = settings.explicitContent;
+        console.log('🔞 Explicit content allowed:', settings.explicitContent);
+    }
+    
     console.log('✅ Core settings applied successfully');
 }
 
@@ -3907,103 +4543,161 @@ function applySettings(settings) {
 function loadSettingsIntoModal(settings) {
     console.log('🔧 Loading settings into modal:', settings);
     
-    // Load shuffle type
-    const shuffleTypeSelect = document.getElementById('shuffle-type');
-    if (shuffleTypeSelect && settings.shuffleType) {
-        shuffleTypeSelect.value = settings.shuffleType;
-    }
-    
-    // Load genre preferences
-    if (settings.genres) {
-        // First, clear all genre selections
-        document.querySelectorAll('.settings-genre-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
+    try {
+        // Load shuffle type
+        const shuffleTypeSelect = document.getElementById('shuffle-type');
+        if (shuffleTypeSelect && settings.shuffleType) {
+            shuffleTypeSelect.value = settings.shuffleType;
+        }
         
-        // Then, activate selected genres
-        settings.genres.forEach(genre => {
-            const genreBtn = document.querySelector(`[data-genre="${genre}"]`);
-            if (genreBtn) {
-                genreBtn.classList.add('active');
-            }
-        });
-    }
-    
-    // Load mood preferences
-    if (settings.moods) {
-        // First, clear all mood selections
-        document.querySelectorAll('.settings-mood-option').forEach(option => {
-            option.classList.remove('active');
-        });
+        // Load genre preferences
+        if (settings.genres) {
+            // First, clear all genre selections
+            document.querySelectorAll('.settings-genre-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Then, activate selected genres
+            settings.genres.forEach(genre => {
+                const genreBtn = document.querySelector(`[data-genre="${genre}"]`);
+                if (genreBtn) {
+                    genreBtn.classList.add('active');
+                }
+            });
+        }
         
-        // Then, activate selected moods
-        settings.moods.forEach(mood => {
-            const moodOption = document.querySelector(`[data-mood="${mood}"]`);
-            if (moodOption) {
-                moodOption.classList.add('active');
+        // Load mood preferences
+        if (settings.moods) {
+            // First, clear all mood selections
+            document.querySelectorAll('.settings-mood-option').forEach(option => {
+                option.classList.remove('active');
+            });
+            
+            // Then, activate selected moods
+            settings.moods.forEach(mood => {
+                const moodOption = document.querySelector(`[data-mood="${mood}"]`);
+                if (moodOption) {
+                    moodOption.classList.add('active');
+                }
+            });
+        }
+        
+        // Load language preferences
+        const languageSelect = document.getElementById('language-select');
+        if (languageSelect && settings.languages) {
+            // Clear current selections
+            Array.from(languageSelect.options).forEach(option => {
+                option.selected = false;
+            });
+            
+            // Select user languages
+            settings.languages.forEach(lang => {
+                const option = languageSelect.querySelector(`option[value="${lang}"]`);
+                if (option) {
+                    option.selected = true;
+                }
+            });
+        }
+        
+        // Load year range
+        const yearFrom = document.getElementById('year-from');
+        const yearTo = document.getElementById('year-to');
+        if (yearFrom && settings.yearFrom) {
+            yearFrom.value = settings.yearFrom;
+        }
+        if (yearTo && settings.yearTo) {
+            yearTo.value = settings.yearTo;
+        }
+        
+        // Load popularity slider
+        const popularitySlider = document.getElementById('popularity-slider');
+        const popularityLabel = document.getElementById('popularity-label');
+        if (popularitySlider && typeof settings.popularity !== 'undefined') {
+            popularitySlider.value = settings.popularity;
+            if (popularityLabel) {
+                popularityLabel.textContent = `${settings.popularity}%`;
             }
-        });
-    }
-    
-    // Load slider values and update labels
-    const popularitySlider = document.getElementById('settings-popularity');
-    const popularityLabel = document.getElementById('settings-popularity-label');
-    if (popularitySlider && settings.popularity !== undefined) {
-        popularitySlider.value = settings.popularity;
-        if (popularityLabel) {
-            const popularityText = settings.popularity < 25 ? 'Underground' : 
-                                 settings.popularity > 75 ? 'Mainstream' : 'Balanced';
-            popularityLabel.textContent = `${popularityText} (${settings.popularity}%)`;
         }
-    }
-    
-    const librarySlider = document.getElementById('settings-library-ratio');
-    const libraryLabel = document.getElementById('settings-library-label');
-    if (librarySlider && settings.libraryRatio !== undefined) {
-        librarySlider.value = settings.libraryRatio;
-        if (libraryLabel) {
-            const newPercent = 100 - settings.libraryRatio;
-            libraryLabel.textContent = `${newPercent}% New / ${settings.libraryRatio}% Mine`;
+        
+        // Load explicit content setting
+        const explicitCheckbox = document.getElementById('explicit-content');
+        if (explicitCheckbox && typeof settings.explicitContent !== 'undefined') {
+            explicitCheckbox.checked = settings.explicitContent;
         }
-    }
-    
-    const queueSlider = document.getElementById('max-queue-size');
-    const queueLabel = document.getElementById('max-queue-label');
-    if (queueSlider && settings.maxQueueSize !== undefined) {
-        queueSlider.value = settings.maxQueueSize;
-        if (queueLabel) {
-            queueLabel.textContent = `${settings.maxQueueSize} tracks`;
+        
+        // Load track duration settings
+        const minDurationSlider = document.getElementById('min-duration');
+        const minDurationLabel = document.getElementById('min-duration-label');
+        if (minDurationSlider && settings.trackDurationMin) {
+            minDurationSlider.value = settings.trackDurationMin;
+            if (minDurationLabel) {
+                minDurationLabel.textContent = `${settings.trackDurationMin} seconds`;
+            }
         }
-    }
-    
-    // Load checkbox states
-    const checkboxes = [
-        { id: 'auto-playlist', setting: 'autoPlaylist' },
-        { id: 'background-effects', setting: 'backgroundEffects' },
-        { id: 'skip-short-tracks', setting: 'skipShortTracks' },
-        { id: 'enable-notifications', setting: 'enableNotifications' },
-        { id: 'enable-visualization', setting: 'enableVisualization' },
-        { id: 'crossfade-enabled', setting: 'crossfadeEnabled' }
-    ];
-    
-    checkboxes.forEach(({ id, setting }) => {
-        const checkbox = document.getElementById(id);
-        if (checkbox && settings[setting] !== undefined) {
-            checkbox.checked = settings[setting];
+        
+        const maxDurationSlider = document.getElementById('max-duration');
+        const maxDurationLabel = document.getElementById('max-duration-label');
+        if (maxDurationSlider && settings.trackDurationMax) {
+            maxDurationSlider.value = settings.trackDurationMax;
+            if (maxDurationLabel) {
+                const minutes = Math.floor(settings.trackDurationMax / 60);
+                maxDurationLabel.textContent = `${minutes} minutes`;
+            }
         }
-    });
-    
-    // Load year range
-    const yearFromInput = document.getElementById('year-from');
-    const yearToInput = document.getElementById('year-to');
-    if (yearFromInput && settings.yearFrom !== undefined) {
-        yearFromInput.value = settings.yearFrom;
+        
+        // Load UI preferences
+        const darkModeCheckbox = document.getElementById('dark-mode');
+        if (darkModeCheckbox && typeof settings.darkMode !== 'undefined') {
+            darkModeCheckbox.checked = settings.darkMode;
+        }
+        
+        const compactModeCheckbox = document.getElementById('compact-mode');
+        if (compactModeCheckbox && typeof settings.compactMode !== 'undefined') {
+            compactModeCheckbox.checked = settings.compactMode;
+        }
+        
+        const showQueueCheckbox = document.getElementById('show-queue');
+        if (showQueueCheckbox && typeof settings.showQueue !== 'undefined') {
+            showQueueCheckbox.checked = settings.showQueue;
+        }
+        
+        const showLyricsCheckbox = document.getElementById('show-lyrics');
+        if (showLyricsCheckbox && typeof settings.showLyrics !== 'undefined') {
+            showLyricsCheckbox.checked = settings.showLyrics;
+        }
+        
+        // Load privacy settings
+        const saveHistoryCheckbox = document.getElementById('save-history');
+        if (saveHistoryCheckbox && typeof settings.saveListeningHistory !== 'undefined') {
+            saveHistoryCheckbox.checked = settings.saveListeningHistory;
+        }
+        
+        const analyticsCheckbox = document.getElementById('analytics-enabled');
+        if (analyticsCheckbox && typeof settings.analyticsEnabled !== 'undefined') {
+            analyticsCheckbox.checked = settings.analyticsEnabled;
+        }
+        
+        const shareDataCheckbox = document.getElementById('share-data');
+        if (shareDataCheckbox && typeof settings.shareData !== 'undefined') {
+            shareDataCheckbox.checked = settings.shareData;
+        }
+        
+        // Load other advanced settings
+        const autoAdvanceCheckbox = document.getElementById('auto-playlist');
+        if (autoAdvanceCheckbox && typeof settings.autoAdvance !== 'undefined') {
+            autoAdvanceCheckbox.checked = settings.autoAdvance;
+        }
+        
+        const backgroundEffectsCheckbox = document.getElementById('background-effects');
+        if (backgroundEffectsCheckbox && typeof settings.backgroundEffects !== 'undefined') {
+            backgroundEffectsCheckbox.checked = settings.backgroundEffects;
+        }
+        
+        console.log('✅ Settings loaded into modal successfully');
+        
+    } catch (error) {
+        console.error('❌ Error loading settings into modal:', error);
     }
-    if (yearToInput && settings.yearTo !== undefined) {
-        yearToInput.value = settings.yearTo;
-    }
-    
-    console.log('✅ Settings loaded into modal successfully');
 }
 
 // Setup settings modal interaction listeners
