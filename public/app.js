@@ -198,21 +198,28 @@ function initialize() {
       console.log('🔗 Found hash in URL, handling auth callback...');
       handleAuthCallback();
     } else {
-      // Check if we have a stored token
-      console.log('🔍 Checking for existing authentication...');
+      console.log('🔍 No hash found, checking for existing authentication...');
       checkExistingAuth();
     }
     
-    // Initialize the Spotify Web Playback SDK
     console.log('🎵 Initializing Spotify Web Playback SDK...');
     initializeSpotifyPlayer();
     
     // Initialize DOM elements once the page loads
     initializeDOMElements();
     
+    // Setup customization controls
+    setupCustomizationControls();
+    
+    // Check for first-time user and handle onboarding
+    handleUserOnboarding();
+    
+    // Initialize settings system
+    initializeSettings();
+    
     console.log('✅ App initialization complete!');
   } catch (error) {
-    console.error('❌ Error during app initialization:', error);
+    console.error('❌ Error during initialization:', error);
   }
 }
 
@@ -235,6 +242,77 @@ function setupEventListeners() {
     if (logoutButton) {
       logoutButton.addEventListener('click', logout);
       console.log('✅ Logout button listener added');
+    }
+    
+    // Onboarding buttons
+    const startOnboardingBtn = document.getElementById('start-onboarding');
+    const skipOnboardingBtn = document.getElementById('skip-onboarding');
+    
+    if (startOnboardingBtn) {
+      startOnboardingBtn.addEventListener('click', () => {
+        console.log('🎯 Starting onboarding tour...');
+        completeOnboarding();
+        hideOnboardingModal();
+        // Could add highlights or tooltips here in the future
+      });
+      console.log('✅ Start onboarding button listener added');
+    }
+    
+    if (skipOnboardingBtn) {
+      skipOnboardingBtn.addEventListener('click', () => {
+        console.log('⏭️ Skipping onboarding...');
+        completeOnboarding();
+        hideOnboardingModal();
+      });
+      console.log('✅ Skip onboarding button listener added');
+    }
+    
+    // Settings modal functionality
+    const settingsButton = document.getElementById('settings-button');
+    const settingsModal = document.getElementById('settings-modal');
+    const closeSettingsBtn = document.getElementById('close-settings');
+    const saveSettingsBtn = document.getElementById('save-settings');
+    const resetSettingsBtn = document.getElementById('reset-settings');
+    
+    if (settingsButton) {
+      settingsButton.addEventListener('click', () => {
+        console.log('⚙️ Opening settings modal...');
+        showSettingsModal();
+      });
+      console.log('✅ Settings button listener added');
+    }
+    
+    if (closeSettingsBtn) {
+      closeSettingsBtn.addEventListener('click', () => {
+        console.log('❌ Closing settings modal...');
+        hideSettingsModal();
+      });
+      console.log('✅ Close settings button listener added');
+    }
+    
+    if (saveSettingsBtn) {
+      saveSettingsBtn.addEventListener('click', () => {
+        console.log('💾 Saving settings...');
+        saveUserSettings();
+      });
+      console.log('✅ Save settings button listener added');
+    }
+    
+    if (resetSettingsBtn) {
+      resetSettingsBtn.addEventListener('click', () => {
+        console.log('🔄 Resetting settings...');
+        resetUserSettings();
+      });
+      console.log('✅ Reset settings button listener added');
+    }
+
+    // Settings modal overlay click to close
+    if (settingsModal) {
+      settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+          hideSettingsModal();
+        }
+      });
     }
     
     // Discovery buttons
@@ -385,55 +463,58 @@ function redirectToSpotifyAuth() {
     console.log('🧹 Clearing existing tokens...');
     clearAuthTokens();
     
-    const clientId = '69889249cd33426ab241d33713e55fad';
-    const redirectUri = 'http://127.0.0.1:3000/callback';
+    // Generate secure random state for CSRF protection
+    const state = generateRandomString(16);
+    localStorage.setItem('spotify_auth_state', state);
+    
+    // Define the required scopes for the application
     const scopes = [
       'user-read-private',
-      'user-read-email',
+      'user-read-email', 
       'user-read-playback-state',
       'user-modify-playback-state',
       'user-read-currently-playing',
-      'user-read-recently-played',
-      'user-top-read',
       'user-library-read',
       'user-library-modify',
       'playlist-read-private',
       'playlist-read-collaborative',
-      'playlist-modify-private',
       'playlist-modify-public',
-      'streaming'
-    ];
+      'playlist-modify-private',
+      'streaming',
+      'user-read-recently-played',
+      'user-top-read'
+    ].join(' ');
     
-    console.log('🔧 Auth config:', {
-      clientId: clientId,
-      redirectUri: redirectUri,
-      scopes: scopes.length + ' scopes'
-    });
+    // Get client ID from environment or server
+    const clientId = window.SPOTIFY_CLIENT_ID || 'ENVIRONMENT_VARIABLE_REQUIRED';
     
-    // Generate a random state value
-    const state = generateRandomString(16);
-    localStorage.setItem('spotify_auth_state', state);
-    console.log('🔑 Generated state token:', state);
+    if (clientId === 'ENVIRONMENT_VARIABLE_REQUIRED') {
+      console.error('❌ Spotify Client ID not configured');
+      hideLoading();
+      alert('Spotify Client ID not configured. Please check environment variables.');
+      return;
+    }
     
-    // Build the authorization URL
-    const authUrl = 'https://accounts.spotify.com/authorize?' +
-      new URLSearchParams({
-        response_type: 'code',
-        client_id: clientId,
-        scope: scopes.join(' '),
-        redirect_uri: redirectUri,
-        state: state,
-        show_dialog: 'true'
-      }).toString();
+    // Construct authorization URL
+    const redirectUri = encodeURIComponent(`${window.location.origin}/`);
+    const authUrl = `https://accounts.spotify.com/authorize?` +
+      `response_type=token&` +
+      `client_id=${clientId}&` +
+      `scope=${encodeURIComponent(scopes)}&` +
+      `redirect_uri=${redirectUri}&` +
+      `state=${state}&` +
+      `show_dialog=true`;
     
-    console.log('🌐 Authorization URL:', authUrl);
-    console.log('🚀 Redirecting to Spotify...');
+    console.log('🔗 Redirecting to Spotify authorization...');
+    console.log('📋 Scopes requested:', scopes.split(' '));
     
-    // Redirect to Spotify authorization page
+    // Redirect to Spotify
     window.location.href = authUrl;
+    
   } catch (error) {
-    console.error('❌ Error during Spotify auth redirect:', error);
+    console.error('❌ Error during auth redirect:', error);
     hideLoading();
+    alert('Authentication error. Please try again.');
   }
 }
 
@@ -2492,22 +2573,248 @@ function updateMoodDisplay(features) {
 
 // Initialize DOM elements once the page loads
 function initializeDOMElements() {
-  console.log('🔗 Initializing DOM elements...');
-  
-  // Player UI elements that need runtime initialization
-  trackNameElement = document.getElementById('track-name');
-  artistNameElement = document.getElementById('artist-name');
-  albumNameElement = document.getElementById('album-name');
-  vinylRecord = document.getElementById('vinyl-record');
-  albumImageElement = document.getElementById('album-image');
-  albumCoverElement = document.getElementById('album-image'); // Same as albumImageElement for backwards compatibility
-  customizationSidebar = document.getElementById('customization-sidebar');
-  
-  console.log('✅ DOM elements initialized');
-  console.log('🎵 Track name element:', trackNameElement);
-  console.log('🎵 Artist name element:', artistNameElement);
-  console.log('🎵 Album name element:', albumNameElement);
-  console.log('🎵 Album cover element:', albumCoverElement);
-  console.log('🎵 Vinyl record element:', vinylRecord);
-  console.log('🎵 Album image element:', albumImageElement);
-} 
+    // Get DOM elements that need to be available after DOMContentLoaded
+    trackNameElement = document.getElementById('track-name');
+    artistNameElement = document.getElementById('artist-name');
+    albumNameElement = document.getElementById('album-name');
+    vinylRecord = document.getElementById('vinyl-record');
+    albumImageElement = document.getElementById('album-image');
+    albumCoverElement = document.getElementById('album-cover');
+}
+
+// ============================================
+// ONBOARDING SYSTEM
+// ============================================
+
+// Check if user is first-time and handle onboarding
+function handleUserOnboarding() {
+    console.log('🔍 Checking user onboarding status...');
+    
+    const hasSeenOnboarding = localStorage.getItem('trueShuffleOnboardingComplete');
+    const isFirstTimeUser = !hasSeenOnboarding;
+    
+    console.log('👤 First-time user:', isFirstTimeUser);
+    
+    if (isFirstTimeUser) {
+        console.log('🎯 Showing onboarding for first-time user');
+        localStorage.setItem('trueShuffleFirstTimeUser', 'true');
+        showOnboardingModal();
+    } else {
+        console.log('👋 Welcome back! Skipping onboarding for returning user');
+        localStorage.setItem('trueShuffleFirstTimeUser', 'false');
+    }
+}
+
+// Show onboarding modal
+function showOnboardingModal() {
+    const onboardingModal = document.getElementById('onboarding-modal');
+    if (onboardingModal) {
+        onboardingModal.classList.remove('hidden');
+        console.log('✅ Onboarding modal shown');
+    }
+}
+
+// Hide onboarding modal
+function hideOnboardingModal() {
+    const onboardingModal = document.getElementById('onboarding-modal');
+    if (onboardingModal) {
+        onboardingModal.classList.add('hidden');
+        console.log('✅ Onboarding modal hidden');
+    }
+}
+
+// Mark onboarding as complete
+function completeOnboarding() {
+    console.log('✅ Onboarding completed');
+    localStorage.setItem('trueShuffleOnboardingComplete', 'true');
+    localStorage.setItem('trueShuffleFirstTimeUser', 'false');
+}
+
+// Check if current user is first-time
+function isFirstTimeUser() {
+    return localStorage.getItem('trueShuffleFirstTimeUser') === 'true';
+}
+
+// ============================================
+// SETTINGS MANAGEMENT SYSTEM
+// ============================================
+
+// Default settings configuration
+const defaultSettings = {
+    genres: ['pop', 'rock', 'hip-hop', 'electronic', 'jazz', 'classical', 'folk', 'country', 'r-n-b', 'reggae', 'metal', 'indie'],
+    moods: ['happy', 'energetic', 'angry', 'melancholic', 'chill', 'focus', 'party'],
+    popularity: 50,
+    libraryRatio: 50,
+    autoPlaylist: true,
+    backgroundEffects: true,
+    skipShortTracks: false,
+    yearFrom: 1950,
+    yearTo: 2024
+};
+
+// Show settings modal
+function showSettingsModal() {
+    const settingsModal = document.getElementById('settings-modal');
+    if (settingsModal) {
+        // Load current settings into modal
+        const currentSettings = loadUserSettings();
+        loadSettingsIntoModal(currentSettings);
+        
+        // Show modal
+        settingsModal.classList.remove('hidden');
+        settingsModal.classList.add('visible');
+        
+        // Setup modal interaction listeners
+        setupSettingsModalListeners();
+        
+        console.log('✅ Settings modal shown');
+    }
+}
+
+// Hide settings modal
+function hideSettingsModal() {
+    const settingsModal = document.getElementById('settings-modal');
+    if (settingsModal) {
+        settingsModal.classList.add('hidden');
+        settingsModal.classList.remove('visible');
+        console.log('✅ Settings modal hidden');
+    }
+}
+
+// Load user settings from localStorage
+function loadUserSettings() {
+    console.log('📖 Loading user settings...');
+    
+    try {
+        const savedSettings = localStorage.getItem('trueShuffleSettings');
+        if (savedSettings) {
+            const userSettings = JSON.parse(savedSettings);
+            console.log('✅ User settings loaded:', userSettings);
+            return { ...defaultSettings, ...userSettings };
+        }
+    } catch (error) {
+        console.error('❌ Error loading settings:', error);
+    }
+    
+    console.log('🔧 Using default settings');
+    return defaultSettings;
+}
+
+// Save user settings to localStorage
+function saveUserSettings() {
+    console.log('💾 Saving user settings...');
+    
+    try {
+        const settings = collectCurrentSettings();
+        localStorage.setItem('trueShuffleSettings', JSON.stringify(settings));
+        console.log('✅ Settings saved successfully:', settings);
+        
+        // Apply settings immediately
+        applySettings(settings);
+        
+        // Show success notification
+        showNotification('Settings saved successfully!', 'success');
+        
+        // Close modal
+        hideSettingsModal();
+        
+    } catch (error) {
+        console.error('❌ Error saving settings:', error);
+        showNotification('Failed to save settings', 'error');
+    }
+}
+
+// Collect current settings from the modal
+function collectCurrentSettings() {
+    const settings = {};
+    
+    // Collect selected genres
+    const genreButtons = document.querySelectorAll('.settings-genre-btn.active');
+    settings.genres = Array.from(genreButtons).map(btn => btn.dataset.genre);
+    
+    // Collect selected moods
+    const moodOptions = document.querySelectorAll('.settings-mood-option.active');
+    settings.moods = Array.from(moodOptions).map(option => option.dataset.mood);
+    
+    // Collect slider values
+    const popularitySlider = document.getElementById('settings-popularity');
+    const librarySlider = document.getElementById('settings-library-ratio');
+    settings.popularity = popularitySlider ? parseInt(popularitySlider.value) : 50;
+    settings.libraryRatio = librarySlider ? parseInt(librarySlider.value) : 50;
+    
+    // Collect toggle states
+    const autoPlaylistToggle = document.getElementById('auto-playlist');
+    const backgroundToggle = document.getElementById('background-effects');
+    const skipShortToggle = document.getElementById('skip-short-tracks');
+    settings.autoPlaylist = autoPlaylistToggle ? autoPlaylistToggle.checked : true;
+    settings.backgroundEffects = backgroundToggle ? backgroundToggle.checked : true;
+    settings.skipShortTracks = skipShortToggle ? skipShortToggle.checked : false;
+    
+    // Collect year range
+    const yearFrom = document.getElementById('year-from');
+    const yearTo = document.getElementById('year-to');
+    settings.yearFrom = yearFrom ? parseInt(yearFrom.value) : 1950;
+}
+
+// Show notification
+function showNotification(message, type = 'info') {
+    const container = document.getElementById('notification-container');
+    if (!container) return;
+    
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    
+    const icon = type === 'success' ? 'check' : type === 'error' ? 'exclamation-triangle' : 'info-circle';
+    
+    notification.innerHTML = `
+        <div class="notification-content">
+            <i class="fas fa-${icon}"></i>
+            <div class="notification-text">${message}</div>
+        </div>
+    `;
+    
+    container.appendChild(notification);
+    
+    // Show notification
+    setTimeout(() => notification.classList.add('visible'), 100);
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+        notification.classList.remove('visible');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// Initialize settings on app load
+function initializeSettings() {
+    console.log('⚙️ Initializing settings system...');
+    
+    const userSettings = loadUserSettings();
+    applySettings(userSettings);
+    
+    console.log('✅ Settings system initialized');
+}
+
+// Apply settings to the app
+function applySettings(settings) {
+    // Implement your settings application logic here
+    console.log('⚙️ Applying settings:', settings);
+}
+
+// Load settings into the modal
+function loadSettingsIntoModal(settings) {
+    // Implement your settings loading logic here
+    console.log('🔧 Loading settings into modal:', settings);
+}
+
+// Setup settings modal interaction listeners
+function setupSettingsModalListeners() {
+    // Implement your settings modal interaction logic here
+    console.log('✅ Settings modal interaction listeners set up');
+}
+
+// Reset user settings
+function resetUserSettings() {
+    // Implement your reset settings logic here
+    console.log('🔄 Resetting user settings');
+}

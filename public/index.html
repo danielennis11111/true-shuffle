@@ -21,6 +21,45 @@
         </div>
     </div>
 
+    <!-- Onboarding Modal -->
+    <div id="onboarding-modal" class="onboarding-modal hidden">
+        <div class="onboarding-content">
+            <div class="onboarding-header">
+                <h2><i class="fas fa-random"></i> Welcome to True Shuffle!</h2>
+                <p>Your gateway to genuinely random music discovery</p>
+            </div>
+            
+            <div class="onboarding-features">
+                <div class="feature-item">
+                    <i class="fas fa-dice"></i>
+                    <h3>True Randomness</h3>
+                    <p>Experience mathematically perfect shuffling that feels truly random</p>
+                </div>
+                
+                <div class="feature-item">
+                    <i class="fas fa-sliders-h"></i>
+                    <h3>Advanced Controls</h3>
+                    <p>Fine-tune your discovery with genre filters, year ranges, and mood selection</p>
+                </div>
+                
+                <div class="feature-item">
+                    <i class="fas fa-heart"></i>
+                    <h3>Smart Playlists</h3>
+                    <p>Automatically tracks your discoveries in "Heard on True Shuffle" playlist</p>
+                </div>
+            </div>
+            
+            <div class="onboarding-actions">
+                <button id="start-onboarding" class="onboarding-btn primary">
+                    <i class="fas fa-play"></i> Get Started
+                </button>
+                <button id="skip-onboarding" class="onboarding-btn secondary">
+                    Skip Tour
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Header -->
     <header class="header">
         <div class="header-content">
@@ -30,6 +69,10 @@
             </div>
             
             <div id="auth-section" class="auth-section">
+                <button id="settings-button" class="settings-btn" title="Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
+                
                 <button id="login-button" class="login-btn">
                     Connect Spotify
                 </button>
@@ -74,6 +117,121 @@
                         <option value="no-repeats">🚫 No Repeats</option>
                         <option value="mood-based">🎭 Mood Based</option>
                     </select>
+                </div>
+
+                <!-- Advanced Customization Panel -->
+                <div id="advanced-customization" class="advanced-customization">
+                    <h3>🔧 Advanced Customization</h3>
+                    
+                    <!-- Genre Limiters -->
+                    <div class="customization-group">
+                        <h4><i class="fas fa-music"></i> Genre Filters</h4>
+                        <div id="genre-limiters" class="genre-limiters">
+                            <div class="genre-grid-advanced">
+                                <button class="genre-filter-btn active" data-genre="pop">Pop</button>
+                                <button class="genre-filter-btn active" data-genre="rock">Rock</button>
+                                <button class="genre-filter-btn active" data-genre="hip-hop">Hip Hop</button>
+                                <button class="genre-filter-btn active" data-genre="electronic">Electronic</button>
+                                <button class="genre-filter-btn active" data-genre="jazz">Jazz</button>
+                                <button class="genre-filter-btn active" data-genre="classical">Classical</button>
+                                <button class="genre-filter-btn active" data-genre="folk">Folk</button>
+                                <button class="genre-filter-btn active" data-genre="country">Country</button>
+                                <button class="genre-filter-btn active" data-genre="r-n-b">R&B</button>
+                                <button class="genre-filter-btn active" data-genre="reggae">Reggae</button>
+                                <button class="genre-filter-btn active" data-genre="metal">Metal</button>
+                                <button class="genre-filter-btn active" data-genre="indie">Indie</button>
+                            </div>
+                            <div class="genre-controls">
+                                <button id="select-all-genres" class="genre-control-btn">Select All</button>
+                                <button id="deselect-all-genres" class="genre-control-btn">Deselect All</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Year Range Slider -->
+                    <div class="customization-group">
+                        <h4><i class="fas fa-calendar"></i> Year Range</h4>
+                        <div class="year-input-container">
+                            <div class="input-group">
+                                <label for="year-from">From Year</label>
+                                <input type="number" id="year-from" class="year-input" min="1950" max="2024" value="1950" placeholder="1950">
+                            </div>
+                            <div class="input-group">
+                                <label for="year-to">To Year</label>
+                                <input type="number" id="year-to" class="year-input" min="1950" max="2024" value="2024" placeholder="2024">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Popularity Range -->
+                    <div class="customization-group">
+                        <h4><i class="fas fa-chart-line"></i> Music Popularity</h4>
+                        <div class="popularity-slider-container">
+                            <div class="slider-display">
+                                <span class="slider-label">Music Style: <span id="popularity-label">Balanced</span></span>
+                            </div>
+                            <input type="range" id="popularity-slider" class="single-range" min="0" max="100" value="50">
+                            <div class="range-labels">
+                                <span>Underground</span>
+                                <span>Balanced</span>
+                                <span>Mainstream</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- My Songs Percentage -->
+                    <div class="customization-group">
+                        <h4><i class="fas fa-heart"></i> Familiar vs New Music</h4>
+                        <div class="my-songs-container">
+                            <div class="percentage-display">
+                                <span class="percentage-label">My Library: <span id="my-songs-percentage">50</span>%</span>
+                                <span class="percentage-label">New Music: <span id="new-songs-percentage">50</span>%</span>
+                            </div>
+                            <input type="range" id="my-songs-slider" class="single-range" min="0" max="100" value="50">
+                            <div class="range-labels">
+                                <span>All New</span>
+                                <span>Mixed</span>
+                                <span>My Library</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Enhanced Mood Filter with Color Wheel -->
+                    <div class="customization-group">
+                        <h4><i class="fas fa-palette"></i> Mood Selection</h4>
+                        <div id="mood-color-wheel" class="mood-color-wheel">
+                            <div class="mood-wheel-container">
+                                <div class="mood-option" data-mood="happy" style="--mood-color: #FFD700; --position-x: 80%; --position-y: 20%;">
+                                    <i class="fas fa-sun"></i>
+                                    <span>Happy</span>
+                                </div>
+                                <div class="mood-option" data-mood="energetic" style="--mood-color: #FF4444; --position-x: 85%; --position-y: 50%;">
+                                    <i class="fas fa-bolt"></i>
+                                    <span>Energetic</span>
+                                </div>
+                                <div class="mood-option" data-mood="angry" style="--mood-color: #CC0000; --position-x: 70%; --position-y: 80%;">
+                                    <i class="fas fa-fire"></i>
+                                    <span>Angry</span>
+                                </div>
+                                <div class="mood-option" data-mood="melancholic" style="--mood-color: #4A90E2; --position-x: 30%; --position-y: 85%;">
+                                    <i class="fas fa-cloud-rain"></i>
+                                    <span>Sad</span>
+                                </div>
+                                <div class="mood-option" data-mood="chill" style="--mood-color: #50E3C2; --position-x: 15%; --position-y: 50%;">
+                                    <i class="fas fa-leaf"></i>
+                                    <span>Chill</span>
+                                </div>
+                                <div class="mood-option" data-mood="focus" style="--mood-color: #9013FE; --position-x: 20%; --position-y: 20%;">
+                                    <i class="fas fa-brain"></i>
+                                    <span>Focus</span>
+                                </div>
+                                <div class="mood-option" data-mood="party" style="--mood-color: #FF6B9D; --position-x: 50%; --position-y: 10%;">
+                                    <i class="fas fa-party-horn"></i>
+                                    <span>Party</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Mood Selection -->
@@ -140,6 +298,10 @@
                                 <div class="label-text">STEREO</div>
                             </div>
                         </div>
+                        <!-- Static Album Art Overlay -->
+                        <div class="album-art-overlay">
+                            <img id="album-art-static" src="" alt="Album Cover">
+                        </div>
                     </div>
                 </div>
 
@@ -189,6 +351,144 @@
         </section>
 
     </main>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-cog"></i> Settings</h2>
+                <button id="close-settings" class="close-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Genre Preferences -->
+                <div class="settings-group">
+                    <h3><i class="fas fa-music"></i> Genre Preferences</h3>
+                    <div class="settings-genre-grid">
+                        <button class="settings-genre-btn active" data-genre="pop">Pop</button>
+                        <button class="settings-genre-btn active" data-genre="rock">Rock</button>
+                        <button class="settings-genre-btn active" data-genre="hip-hop">Hip Hop</button>
+                        <button class="settings-genre-btn active" data-genre="electronic">Electronic</button>
+                        <button class="settings-genre-btn active" data-genre="jazz">Jazz</button>
+                        <button class="settings-genre-btn active" data-genre="classical">Classical</button>
+                        <button class="settings-genre-btn active" data-genre="folk">Folk</button>
+                        <button class="settings-genre-btn active" data-genre="country">Country</button>
+                        <button class="settings-genre-btn active" data-genre="r-n-b">R&B</button>
+                        <button class="settings-genre-btn active" data-genre="reggae">Reggae</button>
+                        <button class="settings-genre-btn active" data-genre="metal">Metal</button>
+                        <button class="settings-genre-btn active" data-genre="indie">Indie</button>
+                    </div>
+                    <div class="genre-controls">
+                        <button id="settings-select-all" class="settings-control-btn">Select All</button>
+                        <button id="settings-deselect-all" class="settings-control-btn">Deselect All</button>
+                    </div>
+                </div>
+
+                <!-- Mood Preferences -->
+                <div class="settings-group">
+                    <h3><i class="fas fa-palette"></i> Mood Preferences</h3>
+                    <div class="settings-mood-grid">
+                        <div class="settings-mood-option active" data-mood="happy">
+                            <i class="fas fa-sun"></i>
+                            <span>Happy</span>
+                        </div>
+                        <div class="settings-mood-option active" data-mood="energetic">
+                            <i class="fas fa-bolt"></i>
+                            <span>Energetic</span>
+                        </div>
+                        <div class="settings-mood-option active" data-mood="angry">
+                            <i class="fas fa-fire"></i>
+                            <span>Angry</span>
+                        </div>
+                        <div class="settings-mood-option active" data-mood="melancholic">
+                            <i class="fas fa-cloud-rain"></i>
+                            <span>Sad</span>
+                        </div>
+                        <div class="settings-mood-option active" data-mood="chill">
+                            <i class="fas fa-leaf"></i>
+                            <span>Chill</span>
+                        </div>
+                        <div class="settings-mood-option active" data-mood="focus">
+                            <i class="fas fa-brain"></i>
+                            <span>Focus</span>
+                        </div>
+                        <div class="settings-mood-option active" data-mood="party">
+                            <i class="fas fa-party-horn"></i>
+                            <span>Party</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Music Discovery -->
+                <div class="settings-group">
+                    <h3><i class="fas fa-chart-line"></i> Music Discovery</h3>
+                    
+                    <div class="settings-control">
+                        <label for="settings-popularity">
+                            <i class="fas fa-star"></i>
+                            Music Popularity: <span id="settings-popularity-label">Balanced (50%)</span>
+                        </label>
+                        <input type="range" id="settings-popularity" min="0" max="100" value="50">
+                        <div class="range-labels">
+                            <span>Underground</span>
+                            <span>Mainstream</span>
+                        </div>
+                    </div>
+
+                    <div class="settings-control">
+                        <label for="settings-library-ratio">
+                            <i class="fas fa-heart"></i>
+                            My Library vs New: <span id="settings-library-label">50% / 50%</span>
+                        </label>
+                        <input type="range" id="settings-library-ratio" min="0" max="100" value="50">
+                        <div class="range-labels">
+                            <span>All New</span>
+                            <span>All Mine</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- App Preferences -->
+                <div class="settings-group">
+                    <h3><i class="fas fa-sliders-h"></i> App Preferences</h3>
+                    
+                    <div class="settings-toggle">
+                        <label>
+                            <input type="checkbox" id="auto-playlist" checked>
+                            <span class="toggle-slider"></span>
+                            Auto-add to "Heard on True Shuffle" playlist
+                        </label>
+                    </div>
+
+                    <div class="settings-toggle">
+                        <label>
+                            <input type="checkbox" id="background-effects" checked>
+                            <span class="toggle-slider"></span>
+                            Dynamic background colors from album art
+                        </label>
+                    </div>
+
+                    <div class="settings-toggle">
+                        <label>
+                            <input type="checkbox" id="skip-short-tracks">
+                            <span class="toggle-slider"></span>
+                            Skip tracks shorter than 30 seconds
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button id="reset-settings" class="reset-btn">Reset to Defaults</button>
+                <button id="save-settings" class="save-btn">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification System -->
+    <div id="notification-container" class="notification-container"></div>
 
     <script src="shuffle.js"></script>
     <script src="app.js"></script>
