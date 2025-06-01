@@ -185,7 +185,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Initialize the application
-function initialize() {
+async function initialize() {
   console.log('🚀 Initializing True Shuffle app...');
   
   try {
@@ -211,15 +211,13 @@ function initialize() {
     // Setup customization controls
     setupCustomizationControls();
     
-    // Check for first-time user and handle onboarding
-    handleUserOnboarding();
-    
     // Initialize settings system
-    initializeSettings();
+    await initializeSettings();
     
     console.log('✅ App initialization complete!');
+    
   } catch (error) {
-    console.error('❌ Error during initialization:', error);
+    console.error('❌ Error during app initialization:', error);
   }
 }
 
@@ -536,51 +534,54 @@ function checkExistingAuth() {
   }
 }
 
-// Load user data
+// Load user data from Spotify API
 async function loadUserData() {
   try {
-    showLoading();
+    showLoading('Loading your music profile...');
     
-    console.log('👤 Loading user data...');
-    console.log('🔑 Using access token:', accessToken ? accessToken.substring(0, 20) + '...' : 'None');
-    
-    // Fetch user profile
     const userResponse = await fetch('https://api.spotify.com/v1/me', {
       headers: {
         'Authorization': `Bearer ${accessToken}`
       }
     });
     
-    console.log('👤 User profile response status:', userResponse.status);
-    
     if (!userResponse.ok) {
-      const errorText = await userResponse.text();
-      console.error('❌ Failed to fetch user profile:', errorText);
-      
-      if (userResponse.status === 401) {
-        console.log('🔄 User profile request unauthorized, token may be invalid');
-        logout();
-        return;
-      }
-      
       throw new Error('Failed to fetch user profile');
     }
     
     const userData = await userResponse.json();
-    console.log('✅ User data loaded:', userData.display_name || userData.id);
+    currentUser = userData;
+    
+    // Set current user ID for settings
+    currentUserId = userData.id;
+    console.log('👤 User logged in:', userData.display_name, 'ID:', currentUserId);
     
     // Update UI with user data
-    userNameElement.textContent = userData.display_name || userData.id;
-    if (userData.images && userData.images.length > 0) {
+    const userNameElement = document.getElementById('user-name');
+    const userImageElement = document.getElementById('user-image');
+    const userProfileElement = document.getElementById('user-profile');
+    const loginButton = document.getElementById('login-button');
+    
+    if (userNameElement) userNameElement.textContent = userData.display_name || userData.id;
+    if (userData.images && userData.images.length > 0 && userImageElement) {
       userImageElement.src = userData.images[0].url;
-    } else {
+    } else if (userImageElement) {
       userImageElement.src = 'https://via.placeholder.com/40?text=User';
     }
     
     // Show user profile
-    userProfileElement.classList.remove('hidden');
-    userProfileElement.classList.add('flex');
-    loginButton.classList.add('hidden');
+    if (userProfileElement) {
+      userProfileElement.classList.remove('hidden');
+      userProfileElement.classList.add('flex');
+    }
+    if (loginButton) loginButton.classList.add('hidden');
+    
+    // Update main UI elements
+    const authSection = document.getElementById('auth-section');
+    const mainContentElement = document.getElementById('main-content');
+    const authMessageElement = document.getElementById('auth-message');
+    
+    if (authSection) authSection.classList.add('hidden');
     
     // Show main content
     mainContentElement.classList.remove('hidden');
@@ -594,11 +595,20 @@ async function loadUserData() {
     console.log('📝 Ensuring True Shuffle playlists exist...');
     await ensureTrueShufflePlaylists(userData.id);
     
-    // Start fetching recommendations
-    console.log('🎵 Starting to fetch recommendations...');
-    await fetchRecommendations();
+    // Load user settings from server
+    console.log('⚙️ Loading user settings from server...');
+    try {
+      const userSettings = await loadUserSettings();
+      console.log('✅ User settings loaded:', userSettings);
+      
+      // Apply settings immediately
+      applySettings(userSettings);
+    } catch (error) {
+      console.warn('⚠️ Could not load user settings:', error);
+    }
     
     hideLoading();
+    
   } catch (error) {
     console.error('❌ Error loading user data:', error);
     logout();
@@ -3028,17 +3038,25 @@ function isFirstTimeUser() {
 // SETTINGS MANAGEMENT SYSTEM
 // ============================================
 
+// User data storage
+let currentUserId = null;
+
 // Default settings configuration
 const defaultSettings = {
-    genres: ['pop', 'rock', 'hip-hop', 'electronic', 'jazz', 'classical', 'folk', 'country', 'r-n-b', 'reggae', 'metal', 'indie'],
-    moods: ['happy', 'energetic', 'angry', 'melancholic', 'chill', 'focus', 'party'],
+    genres: ['pop', 'rock', 'hip-hop', 'electronic', 'jazz', 'classical'],
+    moods: ['happy', 'energetic', 'chill', 'focus'],
     popularity: 50,
     libraryRatio: 50,
     autoPlaylist: true,
     backgroundEffects: true,
     skipShortTracks: false,
     yearFrom: 1950,
-    yearTo: 2024
+    yearTo: 2024,
+    shuffleType: 'true-random',
+    enableNotifications: true,
+    enableVisualization: true,
+    maxQueueSize: 50,
+    crossfadeEnabled: false
 };
 
 // Show settings modal
@@ -3070,39 +3088,81 @@ function hideSettingsModal() {
     }
 }
 
-// Load user settings from localStorage
-function loadUserSettings() {
+// Load user settings from server or localStorage fallback
+async function loadUserSettings() {
     console.log('📖 Loading user settings...');
     
+    if (currentUserId) {
+        try {
+            // Try to load from server first
+            const response = await fetch(`/api/settings/${currentUserId}`);
+            if (response.ok) {
+                const serverSettings = await response.json();
+                console.log('✅ User settings loaded from server:', serverSettings);
+                
+                // Merge with defaults to ensure all properties exist
+                return { ...defaultSettings, ...serverSettings };
+            }
+        } catch (error) {
+            console.warn('⚠️ Could not load from server, using localStorage fallback:', error);
+        }
+    }
+    
+    // Fallback to localStorage
     try {
         const savedSettings = localStorage.getItem('trueShuffleSettings');
         if (savedSettings && savedSettings !== 'undefined' && savedSettings !== 'null') {
             const userSettings = JSON.parse(savedSettings);
-            console.log('✅ User settings loaded:', userSettings);
+            console.log('✅ User settings loaded from localStorage:', userSettings);
             return { ...defaultSettings, ...userSettings };
         }
     } catch (error) {
-        console.error('❌ Error loading settings:', error);
+        console.error('❌ Error loading settings from localStorage:', error);
     }
     
     console.log('🔧 Using default settings');
     return defaultSettings;
 }
 
-// Save user settings to localStorage
-function saveUserSettings() {
+// Save user settings to server and localStorage backup
+async function saveUserSettings() {
     console.log('💾 Saving user settings...');
     
     try {
         const settings = collectCurrentSettings();
-        localStorage.setItem('trueShuffleSettings', JSON.stringify(settings));
+        
+        // Save to server if user is logged in
+        if (currentUserId) {
+            try {
+                const response = await fetch(`/api/settings/${currentUserId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(settings)
+                });
+                
+                if (response.ok) {
+                    console.log('✅ Settings saved to server successfully');
+                    showNotification('Settings saved to your account!', 'success');
+                } else {
+                    throw new Error('Server save failed');
+                }
+            } catch (error) {
+                console.warn('⚠️ Server save failed, using localStorage backup:', error);
+                localStorage.setItem('trueShuffleSettings', JSON.stringify(settings));
+                showNotification('Settings saved locally (server unavailable)', 'warning');
+            }
+        } else {
+            // Save to localStorage if not logged in
+            localStorage.setItem('trueShuffleSettings', JSON.stringify(settings));
+            showNotification('Settings saved locally', 'info');
+        }
+        
         console.log('✅ Settings saved successfully:', settings);
         
         // Apply settings immediately
         applySettings(settings);
-        
-        // Show success notification
-        showNotification('Settings saved successfully!', 'success');
         
         // Close modal
         hideSettingsModal();
@@ -3128,16 +3188,25 @@ function collectCurrentSettings() {
     // Collect slider values
     const popularitySlider = document.getElementById('settings-popularity');
     const librarySlider = document.getElementById('settings-library-ratio');
+    const maxQueueSlider = document.getElementById('max-queue-size');
     settings.popularity = popularitySlider ? parseInt(popularitySlider.value) : 50;
     settings.libraryRatio = librarySlider ? parseInt(librarySlider.value) : 50;
+    settings.maxQueueSize = maxQueueSlider ? parseInt(maxQueueSlider.value) : 50;
     
-    // Collect toggle states
+    // Collect checkbox states
     const autoPlaylistToggle = document.getElementById('auto-playlist');
     const backgroundToggle = document.getElementById('background-effects');
     const skipShortToggle = document.getElementById('skip-short-tracks');
+    const notificationsToggle = document.getElementById('enable-notifications');
+    const visualizationToggle = document.getElementById('enable-visualization');
+    const crossfadeToggle = document.getElementById('crossfade-enabled');
+    
     settings.autoPlaylist = autoPlaylistToggle ? autoPlaylistToggle.checked : true;
     settings.backgroundEffects = backgroundToggle ? backgroundToggle.checked : true;
     settings.skipShortTracks = skipShortToggle ? skipShortToggle.checked : false;
+    settings.enableNotifications = notificationsToggle ? notificationsToggle.checked : true;
+    settings.enableVisualization = visualizationToggle ? visualizationToggle.checked : true;
+    settings.crossfadeEnabled = crossfadeToggle ? crossfadeToggle.checked : false;
     
     // Collect year range
     const yearFrom = document.getElementById('year-from');
@@ -3149,6 +3218,7 @@ function collectCurrentSettings() {
     const shuffleTypeSelect = document.getElementById('shuffle-type');
     settings.shuffleType = shuffleTypeSelect ? shuffleTypeSelect.value : 'true-random';
     
+    console.log('📊 Collected settings:', settings);
     return settings;
 }
 
@@ -3181,11 +3251,15 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-// Initialize settings on app load
-function initializeSettings() {
+// Initialize settings system
+async function initializeSettings() {
     console.log('⚙️ Initializing settings system...');
     
-    const userSettings = loadUserSettings();
+    // Load user settings
+    const userSettings = await loadUserSettings();
+    
+    // Apply settings to the app
+    console.log('⚙️ Applying settings:', userSettings);
     applySettings(userSettings);
     
     console.log('✅ Settings system initialized');
@@ -3217,25 +3291,97 @@ function loadSettingsIntoModal(settings) {
         shuffleTypeSelect.value = settings.shuffleType;
     }
     
-    // Load year range
-    const yearFrom = document.getElementById('year-from');
-    const yearTo = document.getElementById('year-to');
-    if (yearFrom && settings.yearFrom) yearFrom.value = settings.yearFrom;
-    if (yearTo && settings.yearTo) yearTo.value = settings.yearTo;
+    // Load genre preferences
+    if (settings.genres) {
+        // First, clear all genre selections
+        document.querySelectorAll('.settings-genre-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Then, activate selected genres
+        settings.genres.forEach(genre => {
+            const genreBtn = document.querySelector(`[data-genre="${genre}"]`);
+            if (genreBtn) {
+                genreBtn.classList.add('active');
+            }
+        });
+    }
     
-    // Load sliders
+    // Load mood preferences
+    if (settings.moods) {
+        // First, clear all mood selections
+        document.querySelectorAll('.settings-mood-option').forEach(option => {
+            option.classList.remove('active');
+        });
+        
+        // Then, activate selected moods
+        settings.moods.forEach(mood => {
+            const moodOption = document.querySelector(`[data-mood="${mood}"]`);
+            if (moodOption) {
+                moodOption.classList.add('active');
+            }
+        });
+    }
+    
+    // Load slider values and update labels
     const popularitySlider = document.getElementById('settings-popularity');
-    const librarySlider = document.getElementById('settings-library-ratio');
-    if (popularitySlider && settings.popularity !== undefined) popularitySlider.value = settings.popularity;
-    if (librarySlider && settings.libraryRatio !== undefined) librarySlider.value = settings.libraryRatio;
+    const popularityLabel = document.getElementById('settings-popularity-label');
+    if (popularitySlider && settings.popularity !== undefined) {
+        popularitySlider.value = settings.popularity;
+        if (popularityLabel) {
+            const popularityText = settings.popularity < 25 ? 'Underground' : 
+                                 settings.popularity > 75 ? 'Mainstream' : 'Balanced';
+            popularityLabel.textContent = `${popularityText} (${settings.popularity}%)`;
+        }
+    }
     
-    // Load toggles
-    const autoPlaylistToggle = document.getElementById('auto-playlist');
-    const backgroundToggle = document.getElementById('background-effects');
-    const skipShortToggle = document.getElementById('skip-short-tracks');
-    if (autoPlaylistToggle && settings.autoPlaylist !== undefined) autoPlaylistToggle.checked = settings.autoPlaylist;
-    if (backgroundToggle && settings.backgroundEffects !== undefined) backgroundToggle.checked = settings.backgroundEffects;
-    if (skipShortToggle && settings.skipShortTracks !== undefined) skipShortToggle.checked = settings.skipShortTracks;
+    const librarySlider = document.getElementById('settings-library-ratio');
+    const libraryLabel = document.getElementById('settings-library-label');
+    if (librarySlider && settings.libraryRatio !== undefined) {
+        librarySlider.value = settings.libraryRatio;
+        if (libraryLabel) {
+            const newPercent = 100 - settings.libraryRatio;
+            libraryLabel.textContent = `${newPercent}% New / ${settings.libraryRatio}% Mine`;
+        }
+    }
+    
+    const queueSlider = document.getElementById('max-queue-size');
+    const queueLabel = document.getElementById('max-queue-label');
+    if (queueSlider && settings.maxQueueSize !== undefined) {
+        queueSlider.value = settings.maxQueueSize;
+        if (queueLabel) {
+            queueLabel.textContent = `${settings.maxQueueSize} tracks`;
+        }
+    }
+    
+    // Load checkbox states
+    const checkboxes = [
+        { id: 'auto-playlist', setting: 'autoPlaylist' },
+        { id: 'background-effects', setting: 'backgroundEffects' },
+        { id: 'skip-short-tracks', setting: 'skipShortTracks' },
+        { id: 'enable-notifications', setting: 'enableNotifications' },
+        { id: 'enable-visualization', setting: 'enableVisualization' },
+        { id: 'crossfade-enabled', setting: 'crossfadeEnabled' }
+    ];
+    
+    checkboxes.forEach(({ id, setting }) => {
+        const checkbox = document.getElementById(id);
+        if (checkbox && settings[setting] !== undefined) {
+            checkbox.checked = settings[setting];
+        }
+    });
+    
+    // Load year range
+    const yearFromInput = document.getElementById('year-from');
+    const yearToInput = document.getElementById('year-to');
+    if (yearFromInput && settings.yearFrom !== undefined) {
+        yearFromInput.value = settings.yearFrom;
+    }
+    if (yearToInput && settings.yearTo !== undefined) {
+        yearToInput.value = settings.yearTo;
+    }
+    
+    console.log('✅ Settings loaded into modal successfully');
 }
 
 // Setup settings modal interaction listeners

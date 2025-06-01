@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>True Shuffle - Settings Test</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            background: #121212;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+        }
+        
+        .test-container {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        
+        .test-button {
+            margin: 20px 10px;
+        }
+        
+        h1 {
+            color: #1db954;
+            margin-bottom: 30px;
+        }
+        
+        .status {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1><i class="fas fa-cog"></i> Save Settings Button Test</h1>
+        
+        <p>This page tests the enhanced save settings button functionality.</p>
+        
+        <div class="status">
+            <h3>Current Button Styles:</h3>
+            
+            <!-- Test Save Button -->
+            <div class="test-button">
+                <button id="test-save" class="save-btn">
+                    <i class="fas fa-save"></i>
+                    Save Settings
+                </button>
+            </div>
+            
+            <!-- Test Reset Button -->
+            <div class="test-button">
+                <button id="test-reset" class="reset-btn">
+                    <i class="fas fa-undo-alt"></i>
+                    Reset to Defaults
+                </button>
+            </div>
+        </div>
+        
+        <div class="status">
+            <h3>Button Features:</h3>
+            <ul style="text-align: left; display: inline-block;">
+                <li>✅ Beautiful green gradient design</li>
+                <li>✅ Rounded corners (25px border-radius)</li>
+                <li>✅ Hover effects with elevation</li>
+                <li>✅ Active state with ripple effect</li>
+                <li>✅ Shimmer animation on save button</li>
+                <li>✅ Loading state with spinner</li>
+                <li>✅ Success confirmation with checkmark</li>
+                <li>✅ Error handling with warning icon</li>
+                <li>✅ Disabled state styling</li>
+                <li>✅ Responsive design for mobile</li>
+            </ul>
+        </div>
+        
+        <div class="test-actions">
+            <h3>Test Actions:</h3>
+            <button onclick="testSaveSuccess()" class="save-btn" style="margin: 10px;">
+                <i class="fas fa-check-circle"></i> Test Save Success
+            </button>
+            <button onclick="testSaveError()" class="reset-btn" style="margin: 10px;">
+                <i class="fas fa-exclamation-triangle"></i> Test Save Error
+            </button>
+            <button onclick="window.location.href='/'" class="save-btn" style="margin: 10px;">
+                <i class="fas fa-arrow-left"></i> Back to App
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function testSaveSuccess() {
+            const button = document.getElementById('test-save');
+            const originalText = button.innerHTML;
+            
+            // Show loading
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            
+            setTimeout(() => {
+                // Show success
+                button.innerHTML = '<i class="fas fa-check"></i> Saved!';
+                button.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+                
+                setTimeout(() => {
+                    // Reset
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                    button.style.background = '';
+                }, 2000);
+            }, 1000);
+        }
+        
+        function testSaveError() {
+            const button = document.getElementById('test-save');
+            const originalText = button.innerHTML;
+            
+            // Show loading
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            
+            setTimeout(() => {
+                // Show error
+                button.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+                button.style.background = 'linear-gradient(135deg, #dc3545 0%, #e74c3c 100%)';
+                
+                setTimeout(() => {
+                    // Reset
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                    button.style.background = '';
+                }, 2000);
+            }, 1000);
+        }
+        
+        // Add ripple effect to all buttons
+        document.querySelectorAll('button').forEach(button => {
+            button.addEventListener('click', function(e) {
+                const ripple = document.createElement('span');
+                const rect = this.getBoundingClientRect();
+                const size = Math.max(rect.width, rect.height);
+                const x = e.clientX - rect.left - size / 2;
+                const y = e.clientY - rect.top - size / 2;
+                
+                ripple.style.cssText = `
+                    position: absolute;
+                    width: ${size}px;
+                    height: ${size}px;
+                    left: ${x}px;
+                    top: ${y}px;
+                    background: rgba(255, 255, 255, 0.3);
+                    border-radius: 50%;
+                    transform: scale(0);
+                    animation: ripple 0.6s ease-out;
+                    pointer-events: none;
+                `;
+                
+                this.style.position = 'relative';
+                this.style.overflow = 'hidden';
+                this.appendChild(ripple);
+                
+                setTimeout(() => ripple.remove(), 600);
+            });
+        });
+        
+        // Add CSS animation for ripple
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes ripple {
+                to {
+                    transform: scale(2);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html> 

@@ -478,6 +478,78 @@
                             Skip tracks shorter than 30 seconds
                         </label>
                     </div>
+
+                    <div class="settings-toggle">
+                        <label>
+                            <input type="checkbox" id="enable-notifications" checked>
+                            <span class="toggle-slider"></span>
+                            Show notifications for track changes
+                        </label>
+                    </div>
+
+                    <div class="settings-toggle">
+                        <label>
+                            <input type="checkbox" id="enable-visualization" checked>
+                            <span class="toggle-slider"></span>
+                            Enable audio visualization effects
+                        </label>
+                    </div>
+
+                    <div class="settings-toggle">
+                        <label>
+                            <input type="checkbox" id="crossfade-enabled">
+                            <span class="toggle-slider"></span>
+                            Enable crossfade between tracks (experimental)
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Discovery Mode Selection -->
+                <div class="settings-group">
+                    <h3><i class="fas fa-random"></i> Discovery Mode</h3>
+                    <div class="settings-control">
+                        <label for="shuffle-type">Shuffle Algorithm:</label>
+                        <select id="shuffle-type" class="settings-select">
+                            <option value="true-random">True Random - Completely random selection</option>
+                            <option value="never-played">Never Played - Only tracks you haven't heard</option>
+                            <option value="genre-mix">Genre Mix - Blend selected genres</option>
+                            <option value="genre-balanced">Genre Balanced - Equal representation</option>
+                            <option value="no-repeats">No Repeats - Avoid recent plays</option>
+                            <option value="mood-based">Mood Based - Match current mood</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Queue Settings -->
+                <div class="settings-group">
+                    <h3><i class="fas fa-list"></i> Queue Settings</h3>
+                    
+                    <div class="settings-control">
+                        <label for="max-queue-size">
+                            <i class="fas fa-layer-group"></i>
+                            Max Queue Size: <span id="max-queue-label">50 tracks</span>
+                        </label>
+                        <input type="range" id="max-queue-size" min="10" max="200" value="50" step="10">
+                        <div class="range-labels">
+                            <span>10</span>
+                            <span>200</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Year Range -->
+                <div class="settings-group">
+                    <h3><i class="fas fa-calendar"></i> Year Range</h3>
+                    <div class="year-range-container">
+                        <div class="settings-control">
+                            <label for="year-from">From Year:</label>
+                            <input type="number" id="year-from" min="1900" max="2024" value="1950" class="year-input">
+                        </div>
+                        <div class="settings-control">
+                            <label for="year-to">To Year:</label>
+                            <input type="number" id="year-to" min="1900" max="2024" value="2024" class="year-input">
+                        </div>
+                    </div>
                 </div>
             </div>
 

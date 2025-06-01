@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Storage - True Shuffle</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #121212;
+            color: #ffffff;
+            text-align: center;
+            padding: 50px;
+        }
+        .clear-btn {
+            background: #ff4444;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .clear-btn:hover {
+            background: #ff6666;
+        }
+        .back-btn {
+            background: #1db954;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .back-btn:hover {
+            background: #1ed760;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success { background: #1db954; }
+        .info { background: #4a90e2; }
+    </style>
+</head>
+<body>
+    <h1>🧹 Clear Storage - True Shuffle</h1>
+    
+    <div id="status" class="status info">
+        This will clear all stored user data and settings.
+    </div>
+    
+    <button class="clear-btn" onclick="clearStorage()">Clear All Data</button>
+    <button class="back-btn" onclick="window.location.href='/'">Back to App</button>
+    
+    <div id="info" style="margin-top: 30px; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto;">
+        <h3>What will be cleared:</h3>
+        <ul>
+            <li>User account data</li>
+            <li>Settings preferences</li>
+            <li>Spotify authentication tokens</li>
+            <li>Usage statistics</li>
+            <li>All localStorage entries</li>
+        </ul>
+    </div>
+
+    <script>
+        function clearStorage() {
+            if (confirm('Are you sure you want to clear all stored data? This cannot be undone.')) {
+                try {
+                    localStorage.clear();
+                    document.getElementById('status').textContent = '✅ All data cleared successfully!';
+                    document.getElementById('status').className = 'status success';
+                    
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 2000);
+                } catch (error) {
+                    document.getElementById('status').textContent = '❌ Error clearing data: ' + error.message;
+                    document.getElementById('status').className = 'status error';
+                }
+            }
+        }
+        
+        // Show current storage info on load
+        window.addEventListener('load', () => {
+            const keys = Object.keys(localStorage);
+            const info = document.getElementById('info');
+            
+            if (keys.length === 0) {
+                info.innerHTML += '<p><strong>Current storage:</strong> Empty</p>';
+            } else {
+                info.innerHTML += `<p><strong>Current storage items:</strong> ${keys.length}</p>`;
+                info.innerHTML += '<ul>';
+                keys.forEach(key => {
+                    const value = localStorage.getItem(key);
+                    const size = value ? (value.length / 1024).toFixed(2) + ' KB' : '0 KB';
+                    info.innerHTML += `<li><code>${key}</code> (${size})</li>`;
+                });
+                info.innerHTML += '</ul>';
+            }
+        });
+    </script>
+</body>
+</html> 
