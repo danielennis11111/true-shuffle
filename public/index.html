@@ -27,10 +27,25 @@
             <div class="app-branding">
                 <div class="logo">
                     <i class="fas fa-random logo-icon"></i>
-                    <h1 class="app-name">True Shuffle</h1>
+                    <h1 class="app-name">True Shuffle Radio</h1>
                 </div>
                 <span class="app-version">2.1</span>
             </div>
+
+            <section id="config-section" class="">
+                <div class="config-container">
+                    
+                    
+                    
+                    
+                    
+    
+                    <button id="discover-btn" class="discover-btn">
+                        <i class="fas fa-play"></i>
+                        Start Radio
+                    </button>
+                </div>
+            </section>
             
             <div class="user-area">
                 <div id="user-display" class="user-display hidden">
@@ -54,26 +69,7 @@
     <main id="main-content" class="main-content">
         
         <!-- Discovery Configuration -->
-        <section id="config-section" class="config-section">
-            <div class="config-container">
-                <h2>Choose Your Radio Mode</h2>
-                
-                <div class="discovery-modes">
-                    <select id="shuffle-type" class="mode-select">
-                        <option value="true-shuffle-library">📚 True Shuffle My Library</option>
-                        <option value="true-shuffle-all">🌐 True Shuffle All of Spotify</option>
-                    </select>
-                </div>
-                
-                <div id="shuffle-description" class="shuffle-description hidden">
-                </div>
-
-                <button id="discover-btn" class="discover-btn">
-                    <i class="fas fa-play"></i>
-                    Start Radio
-                </button>
-            </div>
-        </section>
+        
 
         <!-- Vinyl Player -->
         <section id="player-section" class="player-section hidden">
@@ -89,7 +85,7 @@
                             </div>
                             <!-- Center Label -->
                             <div class="center-label">
-                                <div class="label-text">STEREO</div>
+                                <div class="label-text">TSR</div>
                             </div>
                         </div>
                         <!-- Static Album Art Overlay -->
@@ -133,12 +129,7 @@
                     <button id="like-button" class="action-btn">
                         <i class="far fa-heart"></i>
                     </button>
-                    <button id="discover-more-btn" class="action-btn primary">
-                        Discover More
-                    </button>
-                    <button id="back-to-config-btn" class="action-btn">
-                        Back to Config
-                    </button>
+                    
                 </div>
 
             </div>
@@ -146,14 +137,12 @@
         
         <!-- Visualizer -->
         <div id="visualizer" class="visualizer hidden">
-            <!-- Keep the visualizer as is -->
-            // ... existing code ...
+            <!-- Visualizer content -->
         </div>
 
         <!-- Queue Section -->
         <section id="queue-section" class="queue-section hidden">
-            <!-- Keep the queue section as is -->
-            // ... existing code ...
+            <!-- Queue content -->
         </section>
     </main>
 
@@ -171,8 +160,7 @@
 
     <!-- Help & Info Modal -->
     <div id="help-modal" class="modal hidden">
-        <!-- Keep the help modal as is -->
-        // ... existing code ...
+        <!-- Help modal content -->
     </div>
 
     <!-- Notification Area -->
@@ -180,14 +168,12 @@
 
     <!-- Track Detail Popup -->
     <div id="track-details" class="track-details hidden">
-        <!-- Keep the track detail popup as is -->
-        // ... existing code ...
+        <!-- Track details content -->
     </div>
 
     <!-- First-time User Onboarding -->
     <div id="onboarding-modal" class="modal hidden">
-        <!-- Keep the onboarding modal as is -->
-        // ... existing code ...
+        <!-- Onboarding content -->
     </div>
 
     <!-- Scripts -->

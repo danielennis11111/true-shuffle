@@ -1974,7 +1974,7 @@ function initializeSpotifyPlayer() {
       console.log('✅ Spotify Player ready with Device ID:', device_id);
       spotifyPlayer = player;
       deviceId = device_id;
-      showNotification('Spotify Player connected successfully!', 'success');
+      
     });
 
     // Not Ready
