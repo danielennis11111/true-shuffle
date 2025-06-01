@@ -409,7 +409,7 @@ function setupEventListeners() {
     }
     
     if (backToConfigBtn) {
-      backToConfigBtn.addEventListener('click', showDiscoverySection);
+      backToConfigBtn.addEventListener('click', showRadioSection);
       console.log('✅ Back to config button listener added');
     }
     
@@ -814,34 +814,15 @@ async function fetchRecommendations() {
     let tracks = [];
     
     switch(currentShuffleType) {
-      case 'true-random':
-      case 'fisherYates':
-        tracks = await fetchTrulyRandomTracks();
+      case 'true-shuffle-all':
+        tracks = await fetchTrueShuffleAllSpotify();
         break;
-      case 'never-played':
-      case 'neverPlayed':
-        tracks = await fetchNeverPlayedTracks();
+      case 'true-shuffle-library':
+        tracks = await fetchTrueShuffleMyLibrary();
         break;
-      case 'genre-mix':
-      case 'mixGenres':
-        tracks = await fetchMixedGenreTracks();
-        break;
-      case 'genre-balanced':
-      case 'genreBalanced':
-        tracks = await fetchGenreBalancedTracks();
-        break;
-      case 'no-repeats':
-      case 'noRepeats':
-        tracks = await fetchNoRepeatTracks();
-        break;
-      case 'mood-based':
-      case 'moodBased':
-        // Call fetchMoodBasedTracks to get more tracks for the current mood
-        await fetchMoodBasedTracks();
-        return;
       default:
-        console.warn(`⚠️ Unknown shuffle type: ${currentShuffleType}, falling back to true-random`);
-        tracks = await fetchTrulyRandomTracks();
+        console.warn(`⚠️ Unknown shuffle type: ${currentShuffleType}, falling back to true-shuffle-all`);
+        tracks = await fetchTrueShuffleAllSpotify();
     }
     
     // Assign tracks to shuffledTracks and shuffle them
@@ -859,7 +840,7 @@ async function fetchRecommendations() {
     } else {
       console.warn('⚠️ No tracks found, trying fallback...');
       // Try fallback to basic search
-      tracks = await fetchTrulyRandomTracks();
+      tracks = await fetchTrueShuffleAllSpotify();
       if (tracks && tracks.length > 0) {
         shuffledTracks = fisherYatesShuffle([...tracks]);
         currentTrackIndex = 0;
@@ -1865,12 +1846,8 @@ async function fetchNoRepeatTracks() {
 // Get shuffle display name based on type
 function getShuffleDisplayName(type) {
   const names = {
-    fisherYates: 'True Random',
-    neverPlayed: 'Never Played Songs',
-    mixGenres: 'Mix Genres',
-    genreBalanced: 'Genre Balanced',
-    noRepeats: 'No Repeats',
-    moodBased: 'Mood Based'
+    'true-shuffle-all': 'True Shuffle All of Spotify',
+    'true-shuffle-library': 'True Shuffle My Library'
   };
   return names[type] || 'Unknown';
 }
@@ -3268,7 +3245,7 @@ function trackShuffleUsage(shuffleType, count = 1) {
 }
 
 function discoverMusic() {
-  console.log('🎵 Starting music discovery process...');
+  console.log('🎵 Starting radio mode...');
   
   // Check usage limits before proceeding
   const canProceed = trackShuffleUsage(currentShuffleType, 1);
@@ -3286,12 +3263,12 @@ function discoverMusic() {
 
 function showPlayerSection() {
   console.log('🎵 Showing player section...');
-  const discoverySettings = document.getElementById('discovery-settings');
+  const radioSettings = document.getElementById('radio-settings');
   const playerSection = document.getElementById('player-section');
   
-  if (discoverySettings) {
-    discoverySettings.style.display = 'none';
-    console.log('🙈 Hidden discovery settings');
+  if (radioSettings) {
+    radioSettings.style.display = 'none';
+    console.log('🙈 Hidden radio settings');
   }
   
   if (playerSection) {
@@ -3301,9 +3278,9 @@ function showPlayerSection() {
   }
 }
 
-function showDiscoverySection() {
-  console.log('🔍 Showing discovery section...');
-  const discoverySettings = document.getElementById('discovery-settings');
+function showRadioSection() {
+  console.log('🔍 Showing radio section...');
+  const radioSettings = document.getElementById('radio-settings');
   const playerSection = document.getElementById('player-section');
   
   if (playerSection) {
@@ -3312,9 +3289,9 @@ function showDiscoverySection() {
     console.log('🙈 Hidden player section');
   }
   
-  if (discoverySettings) {
-    discoverySettings.style.display = 'block';
-    console.log('👁️ Showed discovery settings');
+  if (radioSettings) {
+    radioSettings.style.display = 'block';
+    console.log('👁️ Showed radio settings');
   }
 }
 
@@ -5536,3 +5513,225 @@ function showNotification(message, type = 'info', duration = 3000) {
 window.onSpotifyWebPlaybackSDKReady = initializeSpotifyPlayer;
 
 // ... existing code ...
+
+// Fetch tracks for True Shuffle All of Spotify mode
+async function fetchTrueShuffleAllSpotify() {
+  console.log('🌐 Fetching tracks from all of Spotify using true randomization...');
+  
+  try {
+    const allTracks = [];
+    const usedTrackIds = new Set();
+    const maxResults = 50;
+    
+    // Strategy 1: Ultra-Random Search with Cryptographic Randomization
+    console.log('🔀 Strategy 1: Ultra-random search exploration...');
+    const ultraRandomTracks = await fetchUltraRandomSearchTracks(customSettings, usedTrackIds, 20);
+    allTracks.push(...ultraRandomTracks);
+    ultraRandomTracks.forEach(track => usedTrackIds.add(track.id));
+    
+    // Strategy 2: Random Recommendations with Random Seeds
+    console.log('🎯 Strategy 2: Random recommendations with diverse seeds...');
+    const recommendationTracks = await fetchRandomRecommendations(customSettings);
+    // Filter out any tracks that are already in our list
+    const uniqueRecommendations = recommendationTracks.filter(track => !usedTrackIds.has(track.id));
+    allTracks.push(...uniqueRecommendations);
+    uniqueRecommendations.forEach(track => usedTrackIds.add(track.id));
+    
+    // Strategy 3: Random Playlist Deep Dive
+    console.log('📋 Strategy 3: Random playlist exploration...');
+    if (allTracks.length < maxResults) {
+      const playlistTracks = await fetchRandomPlaylistTracks(customSettings, usedTrackIds, 15);
+      allTracks.push(...playlistTracks);
+      playlistTracks.forEach(track => usedTrackIds.add(track.id));
+    }
+    
+    // Filter and validate tracks
+    const filteredTracks = filterTracksBySettings(allTracks, customSettings);
+    
+    // Apply cryptographic shuffle for maximum randomness
+    const trulyRandomTracks = cryptographicShuffle(filteredTracks);
+    
+    console.log(`✅ Found ${trulyRandomTracks.length} tracks from all of Spotify`);
+    
+    return trulyRandomTracks.slice(0, maxResults);
+    
+  } catch (error) {
+    console.error('❌ Error in fetchTrueShuffleAllSpotify:', error);
+    return [];
+  }
+}
+
+// Fetch tracks for True Shuffle My Library mode
+async function fetchTrueShuffleMyLibrary() {
+  console.log('📚 Fetching tracks from your library with true randomization...');
+  
+  try {
+    const allTracks = [];
+    const usedTrackIds = new Set();
+    const maxResults = 50;
+    
+    // Strategy 1: Get user's saved tracks (library)
+    console.log('💿 Strategy 1: Fetching from saved tracks...');
+    const savedTracks = await fetchUserSavedTracks();
+    allTracks.push(...savedTracks);
+    savedTracks.forEach(track => usedTrackIds.add(track.id));
+    
+    // Strategy 2: Get tracks from user's playlists
+    console.log('📋 Strategy 2: Fetching from user playlists...');
+    if (allTracks.length < maxResults) {
+      const playlistTracks = await fetchUserPlaylistTracks(usedTrackIds, 20);
+      allTracks.push(...playlistTracks);
+      playlistTracks.forEach(track => usedTrackIds.add(track.id));
+    }
+    
+    // Strategy 3: Get tracks from user's top tracks
+    console.log('🔝 Strategy 3: Fetching from user top tracks...');
+    if (allTracks.length < maxResults) {
+      const topTracks = await fetchUserTopTracks(usedTrackIds);
+      allTracks.push(...topTracks);
+      topTracks.forEach(track => usedTrackIds.add(track.id));
+    }
+    
+    // Filter and validate tracks
+    const filteredTracks = filterTracksBySettings(allTracks, customSettings);
+    
+    // Apply Fisher-Yates shuffle for unbiased randomization
+    const trulyRandomTracks = fisherYatesShuffle(filteredTracks);
+    
+    console.log(`✅ Found ${trulyRandomTracks.length} tracks from your library`);
+    
+    return trulyRandomTracks.slice(0, maxResults);
+    
+  } catch (error) {
+    console.error('❌ Error in fetchTrueShuffleMyLibrary:', error);
+    return [];
+  }
+}
+
+// Fetch user's saved tracks
+async function fetchUserSavedTracks() {
+  console.log('💿 Fetching user saved tracks...');
+  
+  try {
+    // Get a random offset to avoid always getting the same tracks
+    const maxOffset = 500; // Assume user might have up to 500 saved tracks
+    const randomOffset = Math.floor(Math.random() * maxOffset);
+    const limit = 50;
+    
+    const response = await fetch(`https://api.spotify.com/v1/me/tracks?limit=${limit}&offset=${randomOffset}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      // Extract the track objects from the items (saved tracks are wrapped)
+      const tracks = data.items.map(item => item.track).filter(track => track != null);
+      
+      console.log(`✅ Fetched ${tracks.length} saved tracks`);
+      return tracks;
+    } else {
+      console.warn(`⚠️ Failed to fetch saved tracks: ${response.status}`);
+      return [];
+    }
+  } catch (error) {
+    console.error('❌ Error fetching saved tracks:', error);
+    return [];
+  }
+}
+
+// Fetch tracks from user's playlists
+async function fetchUserPlaylistTracks(usedTrackIds, maxTracks) {
+  console.log('📋 Fetching tracks from user playlists...');
+  
+  try {
+    // First get user's playlists
+    const playlistsResponse = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    
+    if (!playlistsResponse.ok) {
+      console.warn(`⚠️ Failed to fetch playlists: ${playlistsResponse.status}`);
+      return [];
+    }
+    
+    const playlistsData = await playlistsResponse.json();
+    const playlists = playlistsData.items;
+    
+    if (!playlists || playlists.length === 0) {
+      console.log('ℹ️ User has no playlists');
+      return [];
+    }
+    
+    // Randomly select up to 3 playlists
+    const selectedPlaylists = getRandomItems(playlists, Math.min(3, playlists.length));
+    
+    // Fetch tracks from each selected playlist
+    const allTracks = [];
+    
+    for (const playlist of selectedPlaylists) {
+      try {
+        // Get a random offset to avoid always getting the same tracks
+        const randomOffset = Math.floor(Math.random() * Math.min(100, playlist.tracks.total));
+        
+        const tracksResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=20&offset=${randomOffset}`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (tracksResponse.ok) {
+          const tracksData = await tracksResponse.json();
+          
+          // Extract tracks, filter out nulls and duplicates
+          const tracks = tracksData.items
+            .map(item => item.track)
+            .filter(track => track != null && !usedTrackIds.has(track.id));
+            
+          console.log(`✅ Fetched ${tracks.length} tracks from playlist "${playlist.name}"`);
+          allTracks.push(...tracks);
+          
+          // If we have enough tracks, stop
+          if (allTracks.length >= maxTracks) break;
+        }
+      } catch (error) {
+        console.error(`❌ Error fetching tracks from playlist ${playlist.id}:`, error);
+      }
+    }
+    
+    return allTracks.slice(0, maxTracks);
+    
+  } catch (error) {
+    console.error('❌ Error fetching user playlist tracks:', error);
+    return [];
+  }
+}
+
+// Fetch user's top tracks
+async function fetchUserTopTracks(usedTrackIds) {
+  console.log('🔝 Fetching user top tracks...');
+  
+  try {
+    // Get top tracks from different time ranges for variety
+    const timeRanges = ['short_term', 'medium_term', 'long_term'];
+    const selectedTimeRange = getRandomItems(timeRanges, 1)[0];
+    
+    const response = await fetch(`https://api.spotify.com/v1/me/top/tracks?limit=50&time_range=${selectedTimeRange}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      // Filter out tracks that are already in our list
+      const tracks = data.items.filter(track => !usedTrackIds.has(track.id));
+      
+      console.log(`✅ Fetched ${tracks.length} top tracks (${selectedTimeRange})`);
+      return tracks;
+    } else {
+      console.warn(`⚠️ Failed to fetch top tracks: ${response.status}`);
+      return [];
+    }
+  } catch (error) {
+    console.error('❌ Error fetching top tracks:', error);
+    return [];
+  }
+}
