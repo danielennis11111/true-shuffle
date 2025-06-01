@@ -3,11 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>True Shuffle 2.0</title>
+    <title>True Shuffle 2.1 - Genuinely Random Music Discovery</title>
+    <meta name="description" content="Experience truly random music discovery with advanced algorithms, mood-based curation, and 6 different shuffle modes. Connect your Spotify for unlimited music exploration.">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="monetization.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://sdk.scdn.co/spotify-player.js"></script>
     <script src="color-thief.min.js"></script>
+    
+    <!-- Analytics & Monetization -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'GA_MEASUREMENT_ID');
+    </script>
 </head>
 <body>
     <!-- Background -->
@@ -18,6 +29,17 @@
         <div class="loading-content">
             <i class="fas fa-spinner fa-spin"></i>
             <p>Loading...</p>
+        </div>
+    </div>
+
+    <!-- Trial Banner (shown when in trial) -->
+    <div id="trial-banner" class="trial-banner hidden">
+        <div class="trial-content">
+            <i class="fas fa-crown"></i>
+            <span>🎉 Premium Trial: <span id="trial-days-remaining">7</span> days remaining</span>
+            <button class="trial-upgrade-btn" onclick="monetization.showPricingModal()">
+                Upgrade Now
+            </button>
         </div>
     </div>
 
@@ -66,23 +88,61 @@
             <div class="logo">
                 <i class="fas fa-random"></i>
                 <h1>True Shuffle</h1>
+                <span class="version-badge">2.1</span>
             </div>
             
+            <!-- Navigation -->
+            <nav class="nav-menu">
+                <!-- Usage Stats Display -->
+                <div id="usage-stats-display" class="usage-stats-mini hidden">
+                    <div class="stats-item">
+                        <span class="stats-label">Today:</span>
+                        <span id="daily-tracks-count" class="stats-value">0</span> tracks
+                    </div>
+                    <div class="stats-item">
+                        <span class="stats-label">Plan:</span>
+                        <span id="user-plan-display" class="stats-value">Free</span>
+                    </div>
+                    <button id="upgrade-btn" class="mini-upgrade-btn hidden" onclick="monetization.showPricingModal()" title="Upgrade to Premium">
+                        <i class="fas fa-crown"></i> Upgrade
+                    </button>
+                </div>
+
+                <!-- Navigation Actions -->
+                <div class="nav-actions">
+                    <button id="help-button" class="nav-btn" title="Help & Tutorial">
+                        <i class="fas fa-question-circle"></i>
+                    </button>
+                    
+                    <button id="settings-button" class="nav-btn" title="Settings">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+            </nav>
+            
+            <!-- Auth Section -->
             <div id="auth-section" class="auth-section">
-                <button id="settings-button" class="settings-btn" title="Settings">
-                    <i class="fas fa-cog"></i>
-                </button>
-                
+                <!-- Login Button (when not authenticated) -->
                 <button id="login-button" class="login-btn">
+                    <i class="fab fa-spotify"></i>
                     Connect Spotify
                 </button>
                 
+                <!-- User Profile (when authenticated) -->
                 <div id="user-profile" class="user-profile hidden">
-                    <img id="user-image" src="" alt="User">
-                    <span id="user-name"></span>
-                    <button id="logout-button" class="logout-btn">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </button>
+                    <div class="user-info">
+                        <img id="user-image" src="" alt="User" class="user-avatar">
+                        <div class="user-details">
+                            <span id="user-name" class="user-name">Loading...</span>
+                            <span id="user-plan" class="user-plan">Free Plan</span>
+                        </div>
+                    </div>
+                    
+                    <div class="user-menu">
+                        <button id="logout-button" class="logout-btn" title="Logout">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -551,11 +611,182 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Advanced Audio Settings -->
+                <div class="settings-group">
+                    <h3><i class="fas fa-volume-up"></i> Audio Settings</h3>
+                    
+                    <div class="settings-control">
+                        <label for="volume-control">
+                            <i class="fas fa-volume-high"></i>
+                            Volume: <span id="volume-label">80%</span>
+                        </label>
+                        <input type="range" id="volume-control" min="0" max="100" value="80">
+                    </div>
+
+                    <div class="settings-toggle">
+                        <label>
+                            <input type="checkbox" id="fade-in-out" checked>
+                            <span class="toggle-slider"></span>
+                            Smooth fade in/out between tracks
+                        </label>
+                    </div>
+
+                    <div class="settings-toggle premium-feature">
+                        <label>
+                            <input type="checkbox" id="normalize-volume">
+                            <span class="toggle-slider"></span>
+                            Volume normalization <span class="premium-badge">PRO</span>
+                        </label>
+                    </div>
+
+                    <div class="settings-toggle premium-feature">
+                        <label>
+                            <input type="checkbox" id="bass-boost">
+                            <span class="toggle-slider"></span>
+                            Bass boost <span class="premium-badge">PRO</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Discovery Intelligence -->
+                <div class="settings-group">
+                    <h3><i class="fas fa-brain"></i> Discovery Intelligence</h3>
+                    
+                    <div class="settings-control">
+                        <label for="discovery-sensitivity">
+                            <i class="fas fa-search"></i>
+                            Discovery Sensitivity: <span id="discovery-sensitivity-label">Medium</span>
+                        </label>
+                        <select id="discovery-sensitivity" class="settings-select">
+                            <option value="low">Conservative - Similar to your taste</option>
+                            <option value="medium" selected>Balanced - Good mix of familiar and new</option>
+                            <option value="high">Adventurous - Push boundaries often</option>
+                        </select>
+                    </div>
+
+                    <div class="settings-control">
+                        <label for="repeat-protection">
+                            <i class="fas fa-shield-alt"></i>
+                            Repeat Protection:
+                        </label>
+                        <select id="repeat-protection" class="settings-select">
+                            <option value="none">None - Allow any repeats</option>
+                            <option value="session" selected>Session - No repeats this session</option>
+                            <option value="persistent">Persistent - Remember across sessions</option>
+                        </select>
+                    </div>
+
+                    <div class="settings-control">
+                        <label for="genre-diversity">
+                            <i class="fas fa-palette"></i>
+                            Genre Diversity: <span id="genre-diversity-label">70%</span>
+                        </label>
+                        <input type="range" id="genre-diversity" min="0" max="100" value="70">
+                        <div class="range-labels">
+                            <span>Focused</span>
+                            <span>Diverse</span>
+                        </div>
+                    </div>
+
+                    <div class="settings-toggle">
+                        <label>
+                            <input type="checkbox" id="mood-adaptation" checked>
+                            <span class="toggle-slider"></span>
+                            Adaptive mood detection
+                        </label>
+                    </div>
+
+                    <div class="settings-toggle premium-feature">
+                        <label>
+                            <input type="checkbox" id="ai-curation">
+                            <span class="toggle-slider"></span>
+                            AI-powered curation <span class="premium-badge">PREMIUM</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- UI Customization -->
+                <div class="settings-group">
+                    <h3><i class="fas fa-desktop"></i> Interface</h3>
+                    
+                    <div class="settings-toggle">
+                        <label>
+                            <input type="checkbox" id="compact-mode">
+                            <span class="toggle-slider"></span>
+                            Compact mode
+                        </label>
+                    </div>
+
+                    <div class="settings-toggle">
+                        <label>
+                            <input type="checkbox" id="show-queue" checked>
+                            <span class="toggle-slider"></span>
+                            Show upcoming tracks queue
+                        </label>
+                    </div>
+
+                    <div class="settings-toggle premium-feature">
+                        <label>
+                            <input type="checkbox" id="show-lyrics">
+                            <span class="toggle-slider"></span>
+                            Show lyrics <span class="premium-badge">PRO</span>
+                        </label>
+                    </div>
+
+                    <div class="settings-toggle">
+                        <label>
+                            <input type="checkbox" id="dark-mode" checked>
+                            <span class="toggle-slider"></span>
+                            Dark mode
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Premium Features -->
+                <div class="settings-group premium-section">
+                    <h3><i class="fas fa-crown"></i> Premium Features</h3>
+                    <div class="premium-info">
+                        <p>Unlock advanced features with a premium subscription:</p>
+                        <ul class="premium-features-list">
+                            <li><i class="fas fa-check"></i> Advanced audio controls</li>
+                            <li><i class="fas fa-check"></i> AI-powered music curation</li>
+                            <li><i class="fas fa-check"></i> Lyrics display</li>
+                            <li><i class="fas fa-check"></i> Playlist export</li>
+                            <li><i class="fas fa-check"></i> Advanced analytics</li>
+                            <li><i class="fas fa-check"></i> Priority support</li>
+                        </ul>
+                        <button class="premium-upgrade-btn" onclick="monetization.showPricingModal()">
+                            <i class="fas fa-crown"></i> Upgrade Now
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Import/Export Settings -->
+                <div class="settings-group">
+                    <h3><i class="fas fa-exchange-alt"></i> Backup & Restore</h3>
+                    <div class="backup-controls">
+                        <button id="export-settings" class="backup-btn">
+                            <i class="fas fa-download"></i> Export Settings
+                        </button>
+                        <button id="import-settings" class="backup-btn">
+                            <i class="fas fa-upload"></i> Import Settings
+                        </button>
+                        <input type="file" id="settings-file-input" accept=".json" style="display: none;">
+                    </div>
+                </div>
             </div>
 
             <div class="modal-footer">
-                <button id="reset-settings" class="reset-btn">Reset to Defaults</button>
-                <button id="save-settings" class="save-btn">Save Settings</button>
+                <div class="footer-left">
+                    <button id="export-settings-btn" class="secondary-btn">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                </div>
+                <div class="footer-right">
+                    <button id="reset-settings" class="reset-btn">Reset to Defaults</button>
+                    <button id="save-settings" class="save-btn">Save Settings</button>
+                </div>
             </div>
         </div>
     </div>
@@ -564,6 +795,8 @@
     <div id="notification-container" class="notification-container"></div>
 
     <script src="shuffle.js"></script>
+    <script src="settings.js"></script>
+    <script src="monetization.js"></script>
     <script src="app.js"></script>
 </body>
 </html> 

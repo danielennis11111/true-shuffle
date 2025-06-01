@@ -1,0 +1,36 @@
+{
+  "genres": [
+    "pop",
+    "rock",
+    "hip-hop",
+    "electronic",
+    "jazz",
+    "classical",
+    "folk",
+    "country",
+    "r-n-b",
+    "indie"
+  ],
+  "moods": [
+    "happy",
+    "energetic",
+    "angry",
+    "melancholic",
+    "chill",
+    "focus",
+    "party"
+  ],
+  "popularity": 100,
+  "libraryRatio": 7,
+  "maxQueueSize": 20,
+  "autoPlaylist": true,
+  "backgroundEffects": true,
+  "skipShortTracks": true,
+  "enableNotifications": true,
+  "enableVisualization": true,
+  "crossfadeEnabled": false,
+  "yearFrom": 1950,
+  "yearTo": 2024,
+  "shuffleType": "true-random",
+  "lastUpdated": "2025-06-01T06:13:47.201Z"
+}

@@ -184,41 +184,364 @@ document.addEventListener('DOMContentLoaded', function() {
   initialize();
 });
 
-// Initialize the application
+// Initialize the app
 async function initialize() {
-  console.log('🚀 Initializing True Shuffle app...');
-  
-  try {
-    // Add event listeners
-    console.log('📝 Setting up event listeners...');
-    setupEventListeners();
+    console.log('🚀 Initializing True Shuffle 2.1...');
     
-    // Check if we have a hash with tokens
-    if (window.location.hash) {
-      console.log('🔗 Found hash in URL, handling auth callback...');
-      handleAuthCallback();
-    } else {
-      console.log('🔍 No hash found, checking for existing authentication...');
-      checkExistingAuth();
+    try {
+        // Show loading
+        showLoading();
+        
+        // Initialize DOM elements first
+        initializeDOMElements();
+        
+        // Initialize enhanced settings system
+        if (typeof initializeEnhancedSettings === 'function') {
+            console.log('⚙️ Initializing enhanced settings...');
+            await initializeEnhancedSettings();
+            setupEnhancedSettingsListeners();
+        }
+        
+        // Initialize monetization system
+        if (typeof window.monetization !== 'undefined') {
+            console.log('💰 Monetization system loaded');
+            // Update usage display
+            updateUsageDisplay();
+        }
+        
+        // Set up event listeners
+        setupEventListeners();
+        
+        // Check for authentication
+        console.log('🔐 Checking authentication state...');
+        
+        // First check if we're returning from Spotify auth
+        if (window.location.hash) {
+            console.log('🔄 Processing auth callback...');
+            handleAuthCallback();
+            return; // Let the callback handle the rest
+        }
+        
+        // Check for existing valid token
+        const existingToken = localStorage.getItem('spotify_access_token');
+        const tokenExpiry = localStorage.getItem('spotify_token_expires');
+        
+        if (existingToken && tokenExpiry) {
+            const now = Date.now();
+            const expiryTime = parseInt(tokenExpiry);
+            
+            if (now < expiryTime) {
+                console.log('✅ Valid token found, auto-logging in...');
+                accessToken = existingToken;
+                refreshToken = localStorage.getItem('spotify_refresh_token');
+                
+                // Load user data and show profile
+                await loadUserData();
+            } else {
+                console.log('⏰ Token expired, clearing auth...');
+                clearAuthTokens();
+                showAuthMessage();
+            }
+        } else {
+            console.log('❌ No valid token found, showing auth...');
+            showAuthMessage();
+        }
+        
+        // Check if this is a first-time user
+        if (isFirstTimeUser()) {
+            console.log('👋 First-time user detected');
+            // Don't show onboarding yet, wait until after auth
+        }
+        
+    } catch (error) {
+        console.error('❌ Error during initialization:', error);
+        showAuthMessage();
+    } finally {
+        hideLoading();
     }
     
-    // NOTE: Spotify Player initialization moved to after successful authentication
-    // This prevents 401 errors when no token is available
+    console.log('✅ App initialization complete');
+}
+
+// Enhanced settings initialization
+async function initializeEnhancedSettings() {
+    // Wait for settings system to load
+    if (window.trueShuffleSettings) {
+        // Listen for settings changes
+        window.addEventListener('settingsApplied', (e) => {
+            console.log('⚙️ Settings applied:', e.detail);
+            handleSettingsChange(e.detail);
+        });
+        
+        // Setup additional event listeners for new settings
+        setupEnhancedSettingsListeners();
+        
+        console.log('✅ Enhanced settings system connected');
+    } else {
+        console.warn('⚠️ Settings system not available, will retry...');
+        setTimeout(initializeEnhancedSettings, 100);
+    }
+}
+
+// Setup event listeners for enhanced settings
+function setupEnhancedSettingsListeners() {
+    // Help button
+    document.addEventListener('click', (e) => {
+        if (e.target.id === 'help-button' || e.target.closest('#help-button')) {
+            showHelpModal();
+        }
+    });
+
+    // Volume control
+    document.addEventListener('input', (e) => {
+        if (e.target.id === 'volume-control') {
+            const volume = parseInt(e.target.value) / 100;
+            if (window.player) {
+                window.player.setVolume(volume);
+            }
+            
+            const label = document.getElementById('volume-label');
+            if (label) {
+                label.textContent = `${e.target.value}%`;
+            }
+        }
+    });
+
+    // Discovery sensitivity
+    document.addEventListener('change', (e) => {
+        if (e.target.id === 'discovery-sensitivity') {
+            const label = document.getElementById('discovery-sensitivity-label');
+            if (label) {
+                const options = {
+                    'low': 'Conservative',
+                    'medium': 'Balanced', 
+                    'high': 'Adventurous'
+                };
+                label.textContent = options[e.target.value] || 'Balanced';
+            }
+        }
+    });
+
+    // Genre diversity slider
+    document.addEventListener('input', (e) => {
+        if (e.target.id === 'genre-diversity') {
+            const label = document.getElementById('genre-diversity-label');
+            if (label) {
+                label.textContent = `${e.target.value}%`;
+            }
+        }
+    });
+
+    // Export/Import settings
+    document.addEventListener('click', (e) => {
+        if (e.target.id === 'export-settings' || e.target.id === 'export-settings-btn') {
+            exportSettings();
+        } else if (e.target.id === 'import-settings') {
+            document.getElementById('settings-file-input').click();
+        }
+    });
+
+    // File input for settings import
+    document.addEventListener('change', (e) => {
+        if (e.target.id === 'settings-file-input') {
+            const file = e.target.files[0];
+            if (file) {
+                importSettings(file);
+            }
+        }
+    });
+
+    // Premium feature interactions
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.premium-feature')) {
+            const feature = e.target.closest('.premium-feature');
+            if (window.monetization && !window.monetization.canUseFeature('premium')) {
+                e.preventDefault();
+                window.monetization.showUpgradePrompt('premium_feature');
+            }
+        }
+    });
+}
+
+// Handle settings changes
+function handleSettingsChange(settings) {
+    // Update global variables
+    if (settings.shuffleType && settings.shuffleType !== currentShuffleType) {
+        currentShuffleType = settings.shuffleType;
+        console.log('🔀 Shuffle type changed to:', currentShuffleType);
+    }
     
-    // Initialize DOM elements once the page loads
-    initializeDOMElements();
+    // Update discovery parameters
+    if (window.customSettings) {
+        window.customSettings.yearFrom = settings.yearFrom;
+        window.customSettings.yearTo = settings.yearTo;
+        window.customSettings.maxPopularity = settings.popularity;
+        window.customSettings.genreDiversity = settings.genreDiversity / 100;
+    }
     
-    // Setup customization controls
-    setupCustomizationControls();
+    // Apply audio settings
+    if (window.player && settings.volume !== undefined) {
+        window.player.setVolume(settings.volume);
+    }
     
-    // Initialize settings system
-    await initializeSettings();
+    // Update monetization tracking
+    if (window.monetization) {
+        window.monetization.trackEvent('settings_changed', {
+            shuffle_type: settings.shuffleType,
+            genres_count: settings.genres?.length || 0,
+            moods_count: settings.moods?.length || 0
+        });
+    }
+}
+
+// Export settings function
+function exportSettings() {
+    if (!window.trueShuffleSettings) {
+        showNotification('Settings system not available', 'error');
+        return;
+    }
     
-    console.log('✅ App initialization complete!');
+    try {
+        const settingsJson = window.trueShuffleSettings.exportSettings();
+        const blob = new Blob([settingsJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `true-shuffle-settings-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showNotification('Settings exported successfully!', 'success');
+        
+        if (window.monetization) {
+            window.monetization.trackEvent('settings_exported');
+        }
+    } catch (error) {
+        console.error('Export failed:', error);
+        showNotification('Failed to export settings', 'error');
+    }
+}
+
+// Import settings function
+function importSettings(file) {
+    if (!window.trueShuffleSettings) {
+        showNotification('Settings system not available', 'error');
+        return;
+    }
     
-  } catch (error) {
-    console.error('❌ Error during app initialization:', error);
-  }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const success = window.trueShuffleSettings.importSettings(e.target.result);
+            if (success && window.monetization) {
+                window.monetization.trackEvent('settings_imported');
+            }
+        } catch (error) {
+            console.error('Import failed:', error);
+            showNotification('Failed to import settings', 'error');
+        }
+    };
+    reader.readAsText(file);
+}
+
+// Enhanced track usage tracking
+function trackShuffleUsage(shuffleType, trackCount) {
+    if (window.monetization) {
+        // Check usage limits before proceeding
+        if (!window.monetization.checkUsageLimits()) {
+            return false; // Usage limit reached
+        }
+        
+        // Track the usage
+        window.monetization.trackShuffleUsage(shuffleType, trackCount);
+    }
+    
+    // Update UI with current usage
+    updateUsageDisplay();
+    
+    return true;
+}
+
+// Update usage display in header
+function updateUsageDisplay() {
+    if (window.monetization) {
+        const stats = window.monetization.getUsageStats();
+        
+        // Update daily tracks count
+        const dailyTracksElement = document.getElementById('daily-tracks-count');
+        if (dailyTracksElement) {
+            dailyTracksElement.textContent = stats.dailyTracks;
+        }
+        
+        // Update plan display
+        const planElement = document.getElementById('user-plan-display');
+        if (planElement) {
+            planElement.textContent = stats.plan.charAt(0).toUpperCase() + stats.plan.slice(1);
+        }
+        
+        // Show/hide upgrade button
+        const upgradeBtn = document.getElementById('upgrade-btn');
+        if (upgradeBtn) {
+            upgradeBtn.classList.toggle('hidden', stats.plan !== 'free');
+        }
+        
+        // Update trial banner if in trial
+        if (stats.isInTrial) {
+            const trialBanner = document.getElementById('trial-banner');
+            const trialDays = document.getElementById('trial-days-remaining');
+            if (trialBanner && trialDays) {
+                trialBanner.classList.remove('hidden');
+                trialDays.textContent = stats.remainingTrialDays;
+            }
+        }
+    }
+}
+
+// Enhanced notification system
+function showNotification(message, type = 'info', duration = 3000) {
+    // Check if settings allow notifications
+    if (window.trueShuffleSettings && !window.trueShuffleSettings.getSetting('enableNotifications')) {
+        return; // Notifications disabled
+    }
+    
+    const container = document.getElementById('notification-container');
+    if (!container) {
+        console.log(`${type.toUpperCase()}: ${message}`);
+        return;
+    }
+    
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    
+    const icons = {
+        success: 'check-circle',
+        error: 'exclamation-triangle', 
+        warning: 'exclamation-circle',
+        info: 'info-circle'
+    };
+    
+    notification.innerHTML = `
+        <div class="notification-content">
+            <i class="fas fa-${icons[type] || 'info-circle'}"></i>
+            <div class="notification-text">${message}</div>
+            <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    container.appendChild(notification);
+    
+    // Auto-remove after duration
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 300);
+        }
+    }, duration);
 }
 
 // Setup event listeners
@@ -537,45 +860,72 @@ function checkExistingAuth() {
 // Load user data from Spotify API
 async function loadUserData() {
   try {
-    showLoading('Loading your music profile...');
+    console.log('👤 Loading user data from Spotify...');
     
-    const userResponse = await fetch('https://api.spotify.com/v1/me', {
+    const response = await fetch('https://api.spotify.com/v1/me', {
       headers: {
         'Authorization': `Bearer ${accessToken}`
       }
     });
-    
-    if (!userResponse.ok) {
-      throw new Error('Failed to fetch user profile');
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    
-    const userData = await userResponse.json();
-    currentUser = userData;
-    
-    // Set current user ID for settings
-    currentUserId = userData.id;
-    console.log('👤 User logged in:', userData.display_name, 'ID:', currentUserId);
-    
-    // Update UI with user data
-    const userNameElement = document.getElementById('user-name');
+
+    const userData = await response.json();
+    console.log('✅ User data loaded:', userData);
+
+    // Get DOM elements
     const userImageElement = document.getElementById('user-image');
+    const userNameElement = document.getElementById('user-name');
+    const userPlanElement = document.getElementById('user-plan');
     const userProfileElement = document.getElementById('user-profile');
     const loginButton = document.getElementById('login-button');
-    
-    if (userNameElement) userNameElement.textContent = userData.display_name || userData.id;
+    const usageStatsDisplay = document.getElementById('usage-stats-mini');
+
+    // Update user profile information
     if (userData.images && userData.images.length > 0 && userImageElement) {
       userImageElement.src = userData.images[0].url;
+      userImageElement.alt = userData.display_name || userData.id;
+      console.log('🖼️ User avatar loaded:', userData.images[0].url);
     } else if (userImageElement) {
-      userImageElement.src = 'https://via.placeholder.com/40?text=User';
+      // Fallback to default avatar
+      userImageElement.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiMxZGIyNTQiLz4KPHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDEyQzE0LjIwOTEgMTIgMTYgMTAuMjA5MSAxNiA4QzE2IDUuNzkwODYgMTQuMjA5MSA0IDEyIDRDOS43OTA4NiA0IDggNS43OTA4NiA4IDhDOCAxMC4yMDkxIDkuNzkwODYgMTIgMTIgMTJaIiBmaWxsPSJ3aGl0ZSIvPgo8cGF0aCBkPSJNMTIgMTRDOC42ODYyOSAxNCA2IDE2LjY4NjMgNiAyMFYyMkgxOFYyMEMxOCAxNi42ODYzIDE1LjMxMzcgMTQgMTIgMTRaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4KPC9zdmc+';
+      userImageElement.alt = 'User Avatar';
+      console.log('🖼️ Using default avatar');
+    }
+
+    if (userNameElement) {
+      userNameElement.textContent = userData.display_name || userData.id;
+      console.log('👤 User name set:', userData.display_name || userData.id);
+    }
+
+    // Determine user plan (Spotify doesn't provide subscription info via public API)
+    if (userPlanElement) {
+      // Check if user has premium by trying to access premium features
+      userPlanElement.textContent = userData.product === 'premium' ? 'Premium' : 'Free Plan';
+      console.log('💳 User plan:', userData.product || 'free');
+    } else if (userPlanElement) {
+      userPlanElement.textContent = 'Free Plan';
     }
     
-    // Show user profile
+    // Show user profile and hide login button
     if (userProfileElement) {
       userProfileElement.classList.remove('hidden');
-      userProfileElement.classList.add('flex');
+      userProfileElement.style.display = 'flex';
+      console.log('✅ User profile shown');
     }
-    if (loginButton) loginButton.classList.add('hidden');
     
+    if (usageStatsDisplay) {
+      usageStatsDisplay.classList.remove('hidden');
+      console.log('✅ Usage stats shown');
+    }
+    
+    if (loginButton) {
+      loginButton.classList.add('hidden');
+      console.log('✅ Login button hidden');
+    }
+
     // Update main UI elements
     const authSection = document.getElementById('auth-section');
     const mainContentElement = document.getElementById('main-content');
@@ -584,17 +934,23 @@ async function loadUserData() {
     if (authSection) authSection.classList.add('hidden');
     
     // Show main content
-    mainContentElement.classList.remove('hidden');
-    authMessageElement.classList.add('hidden');
+    if (mainContentElement) {
+      mainContentElement.classList.remove('hidden');
+      console.log('✅ Main content shown');
+    }
     
+    if (authMessageElement) {
+      authMessageElement.classList.add('hidden');
+    }
+
     // Initialize Spotify Player now that we have a valid token
     console.log('🎵 Initializing Spotify Web Playback SDK...');
     initializeSpotifyPlayer();
-    
+
     // Create our special playlists if they don't exist
     console.log('📝 Ensuring True Shuffle playlists exist...');
     await ensureTrueShufflePlaylists(userData.id);
-    
+
     // Load user settings from server
     console.log('⚙️ Loading user settings from server...');
     try {
@@ -606,9 +962,16 @@ async function loadUserData() {
     } catch (error) {
       console.warn('⚠️ Could not load user settings:', error);
     }
-    
+
     hideLoading();
     
+    // Set up logout button listener
+    const logoutButton = document.getElementById('logout-button');
+    if (logoutButton) {
+      logoutButton.addEventListener('click', logout);
+      console.log('✅ Logout button listener added');
+    }
+
   } catch (error) {
     console.error('❌ Error loading user data:', error);
     logout();
@@ -778,54 +1141,76 @@ function getDateRange() {
 async function fetchTrulyRandomTracks() {
     console.log('🎲 Fetching truly random tracks...');
     
-    const dateRange = getDateRange();
-    console.log('📅 Date range filter:', dateRange);
+    // Get current settings
+    const userSettings = await loadUserSettings();
+    console.log('🔧 Using settings for track search:', {
+        genres: userSettings.genres,
+        moods: userSettings.moods,
+        yearFrom: userSettings.yearFrom,
+        yearTo: userSettings.yearTo
+    });
     
     try {
-        const searchTerms = [
-            // Single letters and characters  
-            'a', 'e', 'o', 'i', 'u', 'n', 'r', 't', 'l', 's', 'h', 'y', 'x', 'z', 'q',
-            
-            // Abstract concepts
-            'echo', 'void', 'flow', 'drift', 'pulse', 'wave', 'spark', 'glow', 'haze', 'mist',
-            'tide', 'wind', 'fire', 'rain', 'snow', 'dawn', 'dusk', 'moon', 'star', 'sun',
-            
-            // Emotions and states
-            'joy', 'hope', 'fear', 'love', 'pain', 'calm', 'rage', 'peace', 'wild', 'free',
-            
-            // Colors and textures
-            'blue', 'gold', 'silver', 'amber', 'crimson', 'jade', 'coral', 'ivory', 'onyx',
-            
-            // Simple words from different languages
-            'agua', 'luz', 'vida', 'amor', 'luna', 'sol', 'mar', 'fuego', 'nuit', 'jour',
-            'bleu', 'rouge', 'noir', 'blanc', 'vert', 'jaune', 'rosa', 'casa', 'tiempo'
-        ];
-        
         const allTracks = [];
         const usedTrackIds = new Set();
-        const maxResults = 56;
+        const maxResults = 50;
         
-        // Shuffle search terms
-        const shuffledTerms = [...searchTerms].sort(() => Math.random() - 0.5);
+        // Strategy 1: Random character searches but with better distribution
+        const consonants = ['b', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'r', 's', 't', 'w'];
+        const vowels = ['a', 'e', 'i', 'o', 'u'];
         
-        for (let i = 0; i < Math.min(20, shuffledTerms.length) && allTracks.length < maxResults; i++) {
-            const term = shuffledTerms[i];
+        // Strategy 2: Random year searches for broader discovery
+        const currentYear = new Date().getFullYear();
+        const randomYears = [];
+        for (let i = 0; i < 5; i++) {
+            randomYears.push(1950 + Math.floor(Math.random() * (currentYear - 1950)));
+        }
+        
+        // Strategy 3: Wildcard searches with random offsets
+        const wildcardSearches = [
+            '*', // Wildcard for any track
+            'the', 'of', 'to', 'and', 'in', 'is', 'you', 'that', 'it', 'he', 'was', 'for', 'on', 'are', 'as', 'with', 'his', 'they', 'i', 'at', 'be', 'this', 'have', 'from', 'or', 'one', 'had', 'by', 'words'
+        ];
+        
+        // Combine all search strategies
+        const allSearches = [
+            ...consonants.map(c => c),
+            ...vowels.map(v => v),
+            ...randomYears.map(y => `year:${y}`),
+            ...wildcardSearches
+        ];
+        
+        // Shuffle all searches
+        const shuffledSearches = [...allSearches].sort(() => Math.random() - 0.5);
+        
+        for (let i = 0; i < Math.min(20, shuffledSearches.length) && allTracks.length < maxResults; i++) {
+            const baseSearch = shuffledSearches[i];
             
-            // Build search query with date filter if enabled
-            let searchQuery = `"${term}"`;
-            if (dateRange) {
-                if (dateRange.from === dateRange.to) {
-                    searchQuery += ` year:${dateRange.from}`;
+            // Build search query with settings
+            let searchQuery = baseSearch;
+            
+            // Apply year filter from settings if specified (overrides random year strategy)
+            if (userSettings.yearFrom && userSettings.yearTo && !baseSearch.includes('year:')) {
+                if (userSettings.yearFrom === userSettings.yearTo) {
+                    searchQuery += ` year:${userSettings.yearFrom}`;
                 } else {
-                    searchQuery += ` year:${dateRange.from}-${dateRange.to}`;
+                    searchQuery += ` year:${userSettings.yearFrom}-${userSettings.yearTo}`;
                 }
+                console.log(`📅 Applied year filter: ${userSettings.yearFrom}-${userSettings.yearTo}`);
+            }
+            
+            // Apply genre filter from settings if user has selected any
+            if (userSettings.genres && userSettings.genres.length > 0) {
+                const randomGenre = userSettings.genres[Math.floor(Math.random() * userSettings.genres.length)];
+                searchQuery += ` genre:"${randomGenre}"`;
+                console.log(`🎵 Applied genre filter: ${randomGenre}`);
             }
             
             try {
-                // Use high random offset to avoid algorithmic bias
-                const randomOffset = Math.floor(Math.random() * 800);
+                // Use much larger random offsets for better distribution
+                const randomOffset = Math.floor(Math.random() * 1000);
                 
-                console.log(`🔍 Searching for: "${searchQuery}" (offset: ${randomOffset})`);
+                console.log(`🔍 Searching: "${searchQuery}" (offset: ${randomOffset})`);
                 
                 const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=track&limit=50&offset=${randomOffset}`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -833,44 +1218,62 @@ async function fetchTrulyRandomTracks() {
                 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log(`📊 Search "${term}" returned ${data.tracks.items.length} tracks`);
+                    console.log(`📊 Search "${baseSearch}" returned ${data.tracks.items.length} tracks`);
                     
                     const validTracks = data.tracks.items.filter(track => {
-                        // Anti-bias filtering
-                        if (track.popularity > 85) return false; // Avoid overly popular tracks
                         if (usedTrackIds.has(track.id)) return false; // No duplicates
                         
-                        // Avoid compilation albums and "hits" collections
+                        // Basic quality filters
                         const albumName = track.album.name.toLowerCase();
+                        const trackName = track.name.toLowerCase();
+                        
+                        // Filter out obvious compilation/karaoke tracks
                         if (albumName.includes('hits') || 
                             albumName.includes('best of') || 
                             albumName.includes('greatest') ||
                             albumName.includes('collection') ||
-                            albumName.includes('anthology')) {
+                            albumName.includes('karaoke') ||
+                            albumName.includes('tribute') ||
+                            trackName.includes('karaoke') ||
+                            trackName.includes('cover version')) {
                             return false;
                         }
                         
                         return true;
                     });
                     
-                    for (const track of validTracks) {
+                    // Add tracks randomly to avoid bias toward first results
+                    const shuffledValidTracks = [...validTracks].sort(() => Math.random() - 0.5);
+                    
+                    for (const track of shuffledValidTracks) {
                         if (allTracks.length >= maxResults) break;
                         allTracks.push(track);
                         usedTrackIds.add(track.id);
                     }
                 } else {
-                    console.warn(`⚠️ Search failed for "${term}":`, response.status);
+                    console.warn(`⚠️ Search failed for "${baseSearch}":`, response.status);
                 }
                 
                 // Small delay to avoid rate limiting
                 await new Promise(resolve => setTimeout(resolve, 50));
                 
             } catch (error) {
-                console.error(`❌ Error searching for "${term}":`, error);
+                console.error(`❌ Error searching for "${baseSearch}":`, error);
             }
         }
         
-        console.log(`✅ Found ${allTracks.length} unique tracks total`);
+        console.log(`✅ Found ${allTracks.length} tracks with current settings`);
+        
+        // Log a sample of what we found for verification
+        if (allTracks.length > 0) {
+            console.log('📋 Sample tracks found:', allTracks.slice(0, 3).map(t => ({
+                name: t.name,
+                artist: t.artists[0].name,
+                year: t.album.release_date,
+                genres: t.genres || 'N/A'
+            })));
+        }
+        
         return allTracks;
         
     } catch (error) {
@@ -918,16 +1321,31 @@ async function fetchRandomTrackIds(existingTracks) {
 async function fetchMixedGenreTracks() {
   console.log('🎨 Creating truly random genre-mixed playlist...');
   
-  // Check if user has selected genres
-  if (selectedGenres.length === 0) {
-    alert('Please select 2-6 genres to mix before discovering music.');
+  // Get settings from enhanced settings system
+  let userSettings = {};
+  try {
+      const storedSettings = localStorage.getItem('trueShuffleSettings');
+      if (storedSettings) {
+          userSettings = JSON.parse(storedSettings);
+      }
+  } catch (error) {
+      console.warn('Could not load user settings, using defaults');
+  }
+  
+  // Use genres from settings, fallback to legacy selectedGenres
+  const genresToUse = userSettings.genres || selectedGenres || [];
+  
+  if (genresToUse.length === 0) {
+    showNotification('Please select 2-6 genres in settings before discovering music.', 'warning');
     return [];
   }
   
-  if (selectedGenres.length < 2) {
-    alert('Please select at least 2 genres to create a mix.');
+  if (genresToUse.length < 2) {
+    showNotification('Please select at least 2 genres to create a mix.', 'warning');
     return [];
   }
+  
+  console.log(`🎨 Using ${genresToUse.length} selected genres:`, genresToUse);
   
   // Diverse genres with specific search strategies to avoid bias
   const genreConfigs = {
@@ -975,82 +1393,101 @@ async function fetchMixedGenreTracks() {
       searches: ['delta blues', 'electric blues', 'chicago blues', 'blues rock', 'acoustic blues'],
       avoidTerms: ['blues hits', 'best blues']
     },
-    'punk': {
-      searches: ['post punk', 'hardcore punk', 'pop punk', 'punk rock', 'garage punk'],
-      avoidTerms: ['punk hits', 'classic punk']
+    'pop': {
+      searches: ['indie pop', 'art pop', 'experimental pop', 'dream pop', 'bedroom pop'],
+      avoidTerms: ['top 40', 'chart pop', 'mainstream pop']
     }
   };
-
-  const tracks = [];
   
-  console.log(`🎨 Using ${selectedGenres.length} selected genres:`, selectedGenres);
+  const allTracks = [];
+  const usedTrackIds = new Set();
+  const maxPerGenre = Math.ceil(50 / genresToUse.length); // Distribute evenly
   
-  for (const genreName of selectedGenres) {
-    const genreConfig = genreConfigs[genreName];
+  for (const genreName of genresToUse) {
+    const genreConfig = genreConfigs[genreName.toLowerCase()];
     if (!genreConfig) {
       console.warn(`⚠️ No configuration found for genre: ${genreName}`);
       continue;
     }
     
-    try {
-      // Pick a random search term for this genre
-      const searchTerm = genreConfig.searches[Math.floor(Math.random() * genreConfig.searches.length)];
+    console.log(`🎵 Fetching ${maxPerGenre} tracks for genre: ${genreName}`);
+    
+    // Get random search terms for this genre
+    const shuffledSearches = [...genreConfig.searches].sort(() => Math.random() - 0.5);
+    
+    for (let i = 0; i < Math.min(3, shuffledSearches.length) && allTracks.length < 50; i++) {
+      const searchTerm = shuffledSearches[i];
       
-      // Use high random offset to avoid popular tracks
-      const randomOffset = Math.floor(Math.random() * 800); // Much higher range
-      
-      // Add year filter to avoid only recent popular tracks
-      const randomYear = Math.floor(Math.random() * 30) + 1990; // 1990-2020
-      const yearQuery = Math.random() > 0.5 ? ` year:${randomYear}` : '';
-      
-      const fullQuery = `${searchTerm}${yearQuery}`;
-      
-      console.log(`🔍 Searching for "${fullQuery}" with offset ${randomOffset}`);
-      
-      const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(fullQuery)}&type=track&limit=25&offset=${randomOffset}&market=US`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.tracks && data.tracks.items && data.tracks.items.length > 0) {
-          // Apply anti-bias filtering
-          const filteredTracks = data.tracks.items.filter(track => {
-            // Avoid extremely popular tracks (likely algorithmic favorites)
-            if (track.popularity > 75) return false;
-            
-            // Avoid tracks with "hits", "best of", "greatest" in name
-            const trackName = track.name.toLowerCase();
-            const albumName = track.album?.name?.toLowerCase() || '';
-            const avoidPatterns = ['hits', 'best of', 'greatest', 'collection', 'essential', 'ultimate'];
-            
-            if (avoidPatterns.some(pattern => trackName.includes(pattern) || albumName.includes(pattern))) {
-              return false;
+      try {
+        // Build search query with year filter from settings
+        let searchQuery = searchTerm;
+        
+        // Apply year filter from settings
+        if (userSettings.yearFrom && userSettings.yearTo) {
+            if (userSettings.yearFrom === userSettings.yearTo) {
+                searchQuery += ` year:${userSettings.yearFrom}`;
+            } else {
+                searchQuery += ` year:${userSettings.yearFrom}-${userSettings.yearTo}`;
             }
+            console.log(`📅 Applied year filter: ${userSettings.yearFrom}-${userSettings.yearTo}`);
+        }
+        
+        const randomOffset = Math.floor(Math.random() * 300);
+        
+        console.log(`🔍 Genre search: "${searchQuery}" (offset: ${randomOffset})`);
+        
+        const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=track&limit=50&offset=${randomOffset}`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          const validTracks = data.tracks.items.filter(track => {
+            // Apply popularity filter from settings
+            const maxPopularity = userSettings.popularity || 85;
+            if (track.popularity > maxPopularity) return false;
             
-            // Avoid compilation albums
-            if (albumName.includes('compilation') || albumName.includes('various artists')) {
-              return false;
+            if (usedTrackIds.has(track.id)) return false;
+            
+            // Filter out avoid terms
+            const trackName = track.name.toLowerCase();
+            const albumName = track.album.name.toLowerCase();
+            const artistName = track.artists[0].name.toLowerCase();
+            
+            for (const avoidTerm of genreConfig.avoidTerms) {
+              if (trackName.includes(avoidTerm) || 
+                  albumName.includes(avoidTerm) || 
+                  artistName.includes(avoidTerm)) {
+                return false;
+              }
             }
             
             return true;
           });
           
-          console.log(`✅ Found ${filteredTracks.length} diverse ${genreName} tracks (filtered from ${data.tracks.items.length})`);
-          tracks.push(...filteredTracks);
+          // Add tracks from this genre
+          let genreTrackCount = 0;
+          for (const track of validTracks) {
+            if (genreTrackCount >= maxPerGenre || allTracks.length >= 50) break;
+            allTracks.push(track);
+            usedTrackIds.add(track.id);
+            genreTrackCount++;
+          }
+          
+          console.log(`✅ Added ${genreTrackCount} tracks from ${genreName} search`);
         }
+        
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (error) {
+        console.error(`❌ Error searching genre ${genreName}:`, error);
       }
-    } catch (error) {
-      console.log(`⚠️ Genre search failed for ${genreName}:`, error);
     }
   }
-
-  console.log(`🎨 Total mixed tracks found: ${tracks.length}`);
   
-  // Additional randomness: shuffle the final track list
-  return fisherYatesShuffle(tracks);
+  console.log(`🎨 Genre mix complete: ${allTracks.length} tracks from ${genresToUse.length} genres`);
+  return fisherYatesShuffle(allTracks);
 }
 
 // Fetch genre-balanced tracks (equal representation)
@@ -1383,6 +1820,90 @@ function initializeSpotifyPlayer() {
       showNotification('Spotify Player disconnected', 'warning');
     });
 
+    // Track ended event (when track finishes playing)
+    player.addListener('player_state_changed', (state) => {
+      if (!state) return;
+      
+      console.log('🎵 Player state changed:', state);
+      
+      const currentTrackFromState = state.track_window.current_track;
+      const isPaused = state.paused;
+      const position = state.position;
+      const duration = state.duration;
+      
+      // Update playback state
+      playbackState.isPlaying = !isPaused;
+      playbackState.currentTrack = currentTrackFromState;
+      playbackState.progressMs = position;
+      playbackState.durationMs = duration;
+      
+      // Update play/pause button UI
+      updatePlayPauseButton(!isPaused);
+      
+      // Update progress bar and time display
+      updateProgressBar(position, duration);
+      
+      // If we have a new track, update the now playing display
+      if (currentTrackFromState && currentTrackFromState.id !== (currentTrack?.id)) {
+        console.log('🔄 New track detected from player state');
+        currentTrack = currentTrackFromState;
+        updateNowPlaying(currentTrackFromState);
+      }
+      
+      // AUTO-ADVANCE LOGIC: Check if track has ended
+      if (window.previousPlayerState) {
+        const prevState = window.previousPlayerState;
+        
+        // Method 1: Track completed naturally (was playing, now at position 0 and paused)
+        if (isPaused && position === 0 && !prevState.paused && 
+            prevState.position > (prevState.duration * 0.9)) {
+          console.log('🏁 Track completed naturally, auto-advancing...');
+          
+          // Track usage for completed song
+          trackShuffleUsage(currentShuffleType, 1);
+          
+          // Auto-advance after brief delay
+          setTimeout(() => {
+            playNextTrack();
+          }, 300);
+        }
+        
+        // Method 2: Position jumped from high to 0 (track skipped to next)
+        else if (!isPaused && position === 0 && prevState.position > (prevState.duration * 0.8) && 
+                 currentTrackFromState?.id !== prevState.track_id) {
+          console.log('🔄 Track auto-advanced by Spotify, syncing queue...');
+          
+          // Find the new track in our queue and update index
+          const trackInQueue = shuffledTracks.findIndex(track => track.id === currentTrackFromState.id);
+          if (trackInQueue !== -1) {
+            currentTrackIndex = trackInQueue;
+            console.log(`🎯 Synced queue position to index ${currentTrackIndex}`);
+          } else {
+            // Track not in our queue, fetch more tracks
+            console.log('🔄 Track not in queue, fetching new tracks...');
+            fetchRecommendations();
+          }
+        }
+      }
+      
+      // Store current state for next comparison
+      window.previousPlayerState = {
+        paused: state.paused,
+        position: state.position,
+        duration: state.duration,
+        track_id: currentTrackFromState?.id
+      };
+      
+      // Animate visualizer based on play state
+      if (!isPaused) {
+        startVisualizerAnimation();
+      } else {
+        stopVisualizerAnimation();
+        // Reset background to default when music is paused
+        resetBackgroundToDefault();
+      }
+    });
+
     // Playback status updates
     player.addListener('player_state_changed', state => {
       if (!state) return;
@@ -1412,6 +1933,43 @@ function initializeSpotifyPlayer() {
         currentTrack = currentTrackFromState;
         updateNowPlaying(currentTrackFromState);
       }
+      
+      // Check if track has ended and automatically play next
+      if (currentTrackFromState && !isPaused && position === 0 && state.track_window.previous_tracks.length > 0) {
+        // Track has ended and moved to next track naturally
+        console.log('🎵 Track ended naturally, syncing with queue...');
+        
+        // Find the track in our queue and update the index
+        const trackInQueue = shuffledTracks.findIndex(track => track.id === currentTrackFromState.id);
+        if (trackInQueue !== -1) {
+          currentTrackIndex = trackInQueue;
+          console.log(`🎯 Synced queue position to index ${currentTrackIndex}`);
+        }
+      }
+      
+      // Detect track completion by checking if position is near end and player stopped
+      if (currentTrackFromState && duration > 0 && position >= duration - 1000 && isPaused) {
+        console.log('🏁 Track completed, playing next track...');
+        
+        // Small delay to ensure Spotify has processed the track end
+        setTimeout(() => {
+          playNextTrack();
+        }, 500);
+      }
+      
+      // Alternative detection: if position is 0 and we're not at the beginning of a new manual track
+      if (currentTrackFromState && position === 0 && !isPaused && 
+          window.lastTrackPosition && window.lastTrackPosition > duration * 0.8) {
+        console.log('🔄 Track transition detected, auto-advancing...');
+        
+        // Small delay to let Spotify process
+        setTimeout(() => {
+          playNextTrack();
+        }, 100);
+      }
+      
+      // Store position for next comparison
+      window.lastTrackPosition = position;
       
       // Animate visualizer based on play state
       if (!isPaused) {
@@ -2320,7 +2878,10 @@ function logout() {
     resetBackgroundToDefault();
     
     // Clear Spotify player
-    spotifyPlayer = null;
+    if (spotifyPlayer) {
+      spotifyPlayer.disconnect();
+      spotifyPlayer = null;
+    }
     
     // Clear tokens
     localStorage.removeItem('spotify_access_token');
@@ -2332,12 +2893,8 @@ function logout() {
     accessToken = null;
     refreshToken = null;
     currentTrack = null;
-    
-    // Disconnect player
-    if (spotifyPlayer) {
-      spotifyPlayer.disconnect();
-      spotifyPlayer = null;
-    }
+    currentUser = null;
+    currentUserId = null;
     
     // Stop animations
     stopVisualizerAnimation();
@@ -2346,18 +2903,61 @@ function logout() {
       clearInterval(window.backgroundInterval);
     }
     
-    // Update UI
-    userProfileElement.classList.add('hidden');
-    userProfileElement.classList.remove('flex');
-    loginButton.classList.remove('hidden');
+    // Get DOM elements
+    const userProfileElement = document.getElementById('user-profile');
+    const loginButton = document.getElementById('login-button');
+    const mainContentElement = document.getElementById('main-content');
+    const authMessageElement = document.getElementById('auth-message');
+    const authSection = document.getElementById('auth-section');
+    const usageStatsDisplay = document.getElementById('usage-stats-mini');
     
-    mainContentElement.classList.add('hidden');
-    authMessageElement.classList.remove('hidden');
+    // Update UI - Hide user profile
+    if (userProfileElement) {
+      userProfileElement.classList.add('hidden');
+      userProfileElement.style.display = 'none';
+      console.log('🙈 User profile hidden');
+    }
+    
+    // Show login button
+    if (loginButton) {
+      loginButton.classList.remove('hidden');
+      console.log('👁️ Login button shown');
+    }
+    
+    // Hide usage stats
+    if (usageStatsDisplay) {
+      usageStatsDisplay.classList.add('hidden');
+    }
+    
+    // Hide main content and show auth section
+    if (mainContentElement) {
+      mainContentElement.classList.add('hidden');
+      console.log('🙈 Main content hidden');
+    }
+    
+    if (authSection) {
+      authSection.classList.remove('hidden');
+      console.log('👁️ Auth section shown');
+    }
+    
+    if (authMessageElement) {
+      authMessageElement.classList.remove('hidden');
+      console.log('👁️ Auth message shown');
+    }
     
     // Clear track data
     shuffledTracks = [];
     currentTrackIndex = 0;
     updateNowPlaying(null);
+    
+    // Reset any global settings
+    window.selectedGenres = [];
+    window.selectedMood = null;
+    
+    // Show notification
+    showNotification('Successfully logged out', 'success');
+    
+    console.log('✅ Logout complete');
 }
 
 // Refresh access token
@@ -2460,6 +3060,13 @@ window.clearAuthTokens = clearAuthTokens;
 // Discovery flow functions
 function discoverMusic() {
   console.log('🎵 Starting music discovery process...');
+  
+  // Check usage limits before proceeding
+  const canProceed = trackShuffleUsage(currentShuffleType, 1);
+  if (!canProceed) {
+    console.log('⚠️ Usage limit reached, showing upgrade prompt');
+    return; // Usage limit reached, upgrade prompt already shown
+  }
   
   // Show the player section
   showPlayerSection();
@@ -2735,60 +3342,132 @@ function getSearchParameters() {
 async function fetchMoodBasedTracks() {
   console.log('🎭 Fetching mood-based tracks...');
   
-  if (!selectedMood) {
-    console.error('❌ No mood selected');
+  // Get settings from enhanced settings system
+  let userSettings = {};
+  try {
+      const storedSettings = localStorage.getItem('trueShuffleSettings');
+      if (storedSettings) {
+          userSettings = JSON.parse(storedSettings);
+      }
+  } catch (error) {
+      console.warn('Could not load user settings, using defaults');
+  }
+  
+  // Use mood from settings, fallback to legacy selectedMood
+  const moodToUse = (userSettings.moods && userSettings.moods.length > 0) ? 
+                    userSettings.moods[0] : selectedMood;
+  
+  if (!moodToUse) {
+    showNotification('Please select a mood in settings before discovering music.', 'warning');
     return [];
   }
   
-  const dateRange = getDateRange();
-  console.log('📅 Date range filter:', dateRange);
+  console.log('🎭 Using mood:', moodToUse);
   
   try {
-    const mood = moodConfigs[selectedMood];
-    console.log(`🎯 Using mood config for ${mood.name}`);
-    
-    // Define search terms for each mood
+    // Define search terms for each mood with better variety
     const moodSearchTerms = {
-      happy: ['upbeat', 'joyful', 'cheerful', 'positive', 'bright', 'sunny'],
-      chill: ['chill', 'relaxing', 'ambient', 'calm', 'peaceful', 'mellow'],
-      energetic: ['energetic', 'pump up', 'workout', 'high energy', 'intense', 'power'],
-      melancholic: ['sad', 'melancholy', 'emotional', 'heartbreak', 'moody', 'blues'],
-      focus: ['instrumental', 'study', 'focus', 'ambient', 'minimal', 'concentration'],
-      party: ['party', 'dance', 'club', 'electronic', 'beat', 'pump']
+      happy: ['upbeat', 'joyful', 'cheerful', 'positive', 'bright', 'sunny', 'feel good', 'uplifting'],
+      chill: ['chill', 'relaxing', 'ambient', 'calm', 'peaceful', 'mellow', 'downtempo', 'lounge'],
+      energetic: ['energetic', 'pump up', 'workout', 'high energy', 'intense', 'power', 'driving', 'dynamic'],
+      melancholic: ['sad', 'melancholy', 'emotional', 'heartbreak', 'moody', 'blues', 'introspective', 'contemplative'],
+      focus: ['instrumental', 'study', 'focus', 'ambient', 'minimal', 'concentration', 'meditation', 'atmospheric'],
+      party: ['party', 'dance', 'club', 'electronic', 'beat', 'pump', 'celebration', 'festival']
     };
     
-    const searchTerms = moodSearchTerms[selectedMood] || ['music'];
-    const randomTerm = searchTerms[Math.floor(Math.random() * searchTerms.length)];
+    const searchTerms = moodSearchTerms[moodToUse] || ['music'];
+    const allTracks = [];
+    const usedTrackIds = new Set();
     
-    // Build search query with date filter if enabled
-    let searchQuery = randomTerm;
-    if (dateRange) {
-      if (dateRange.from === dateRange.to) {
-        searchQuery += ` year:${dateRange.from}`;
-      } else {
-        searchQuery += ` year:${dateRange.from}-${dateRange.to}`;
+    // Use multiple search terms for better variety
+    const shuffledTerms = [...searchTerms].sort(() => Math.random() - 0.5);
+    
+    for (let i = 0; i < Math.min(4, shuffledTerms.length) && allTracks.length < 50; i++) {
+      const randomTerm = shuffledTerms[i];
+      
+      // Build search query with enhanced settings
+      let searchQuery = randomTerm;
+      
+      // Apply year filter from settings
+      if (userSettings.yearFrom && userSettings.yearTo) {
+          if (userSettings.yearFrom === userSettings.yearTo) {
+              searchQuery += ` year:${userSettings.yearFrom}`;
+          } else {
+              searchQuery += ` year:${userSettings.yearFrom}-${userSettings.yearTo}`;
+          }
+          console.log(`📅 Applied year filter: ${userSettings.yearFrom}-${userSettings.yearTo}`);
       }
+      
+      // Apply genre filter from settings if available
+      if (userSettings.genres && userSettings.genres.length > 0) {
+          const randomGenre = userSettings.genres[Math.floor(Math.random() * userSettings.genres.length)];
+          searchQuery += ` genre:${randomGenre}`;
+          console.log(`🎵 Applied genre filter: ${randomGenre}`);
+      }
+      
+      const randomOffset = Math.floor(Math.random() * 500);
+      
+      console.log(`🔍 Searching for mood tracks: "${searchQuery}" (offset: ${randomOffset})`);
+      
+      try {
+        const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=track&limit=50&offset=${randomOffset}`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`📊 Found ${data.tracks.items.length} mood tracks for "${randomTerm}"`);
+          
+          const validTracks = data.tracks.items.filter(track => {
+            // Apply popularity filter from settings
+            const maxPopularity = userSettings.popularity || 90;
+            if (track.popularity > maxPopularity) return false;
+            
+            if (usedTrackIds.has(track.id)) return false;
+            
+            // Basic quality filters
+            const albumName = track.album.name.toLowerCase();
+            if (albumName.includes('karaoke') || 
+                albumName.includes('tribute') ||
+                albumName.includes('cover')) {
+              return false;
+            }
+            
+            return true;
+          });
+          
+          for (const track of validTracks) {
+            if (allTracks.length >= 50) break;
+            allTracks.push(track);
+            usedTrackIds.add(track.id);
+          }
+        } else {
+          console.error('❌ Mood search failed:', response.status);
+        }
+      } catch (error) {
+        console.error(`❌ Error searching for mood "${randomTerm}":`, error);
+      }
+      
+      // Brief delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    const randomOffset = Math.floor(Math.random() * 500);
+    console.log(`🎭 Mood search complete: ${allTracks.length} tracks for ${moodToUse}`);
     
-    console.log(`🔍 Searching for mood tracks: "${searchQuery}" (offset: ${randomOffset})`);
-    
-    const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=track&limit=50&offset=${randomOffset}`, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log(`📊 Found ${data.tracks.items.length} mood tracks`);
-      return data.tracks.items || [];
+    // Apply Fisher-Yates shuffle and update global state
+    if (allTracks.length > 0) {
+      shuffledTracks = fisherYatesShuffle([...allTracks]);
+      currentTrackIndex = 0;
+      await playCurrentTrack();
     } else {
-      console.error('❌ Mood search failed:', response.status);
-      return [];
+      showNotification('No tracks found for selected mood. Try different settings.', 'warning');
     }
+    
+    return allTracks;
     
   } catch (error) {
     console.error('❌ Error fetching mood-based tracks:', error);
+    showNotification('Failed to fetch mood-based tracks', 'error');
     return [];
   }
 }
@@ -3041,22 +3720,13 @@ function isFirstTimeUser() {
 // User data storage
 let currentUserId = null;
 
-// Default settings configuration
+// Default settings configuration - SIMPLIFIED
 const defaultSettings = {
-    genres: ['pop', 'rock', 'hip-hop', 'electronic', 'jazz', 'classical'],
-    moods: ['happy', 'energetic', 'chill', 'focus'],
-    popularity: 50,
-    libraryRatio: 50,
-    autoPlaylist: true,
-    backgroundEffects: true,
-    skipShortTracks: false,
-    yearFrom: 1950,
-    yearTo: 2024,
-    shuffleType: 'true-random',
-    enableNotifications: true,
-    enableVisualization: true,
-    maxQueueSize: 50,
-    crossfadeEnabled: false
+    genres: [], // User selected genres
+    moods: [],  // User selected moods
+    yearFrom: 1950, // Year range start
+    yearTo: 2024,   // Year range end
+    shuffleType: 'true-random' // Keep shuffle type as it's core functionality
 };
 
 // Show settings modal
@@ -3064,8 +3734,9 @@ function showSettingsModal() {
     const settingsModal = document.getElementById('settings-modal');
     if (settingsModal) {
         // Load current settings into modal
-        const currentSettings = loadUserSettings();
-        loadSettingsIntoModal(currentSettings);
+        loadUserSettings().then(currentSettings => {
+            loadSettingsIntoModal(currentSettings);
+        });
         
         // Show modal
         settingsModal.classList.remove('hidden');
@@ -3088,27 +3759,11 @@ function hideSettingsModal() {
     }
 }
 
-// Load user settings from server or localStorage fallback
+// Load user settings - SIMPLIFIED
 async function loadUserSettings() {
     console.log('📖 Loading user settings...');
     
-    if (currentUserId) {
-        try {
-            // Try to load from server first
-            const response = await fetch(`/api/settings/${currentUserId}`);
-            if (response.ok) {
-                const serverSettings = await response.json();
-                console.log('✅ User settings loaded from server:', serverSettings);
-                
-                // Merge with defaults to ensure all properties exist
-                return { ...defaultSettings, ...serverSettings };
-            }
-        } catch (error) {
-            console.warn('⚠️ Could not load from server, using localStorage fallback:', error);
-        }
-    }
-    
-    // Fallback to localStorage
+    // Try localStorage first
     try {
         const savedSettings = localStorage.getItem('trueShuffleSettings');
         if (savedSettings && savedSettings !== 'undefined' && savedSettings !== 'null') {
@@ -3124,48 +3779,20 @@ async function loadUserSettings() {
     return defaultSettings;
 }
 
-// Save user settings to server and localStorage backup
+// Save user settings - SIMPLIFIED
 async function saveUserSettings() {
     console.log('💾 Saving user settings...');
     
     try {
         const settings = collectCurrentSettings();
         
-        // Save to server if user is logged in
-        if (currentUserId) {
-            try {
-                const response = await fetch(`/api/settings/${currentUserId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(settings)
-                });
-                
-                if (response.ok) {
-                    console.log('✅ Settings saved to server successfully');
-                    showNotification('Settings saved to your account!', 'success');
-                } else {
-                    throw new Error('Server save failed');
-                }
-            } catch (error) {
-                console.warn('⚠️ Server save failed, using localStorage backup:', error);
-                localStorage.setItem('trueShuffleSettings', JSON.stringify(settings));
-                showNotification('Settings saved locally (server unavailable)', 'warning');
-            }
-        } else {
-            // Save to localStorage if not logged in
-            localStorage.setItem('trueShuffleSettings', JSON.stringify(settings));
-            showNotification('Settings saved locally', 'info');
-        }
-        
-        console.log('✅ Settings saved successfully:', settings);
+        // Save to localStorage
+        localStorage.setItem('trueShuffleSettings', JSON.stringify(settings));
+        console.log('✅ Settings saved to localStorage:', settings);
+        showNotification('Settings saved successfully!', 'success');
         
         // Apply settings immediately
         applySettings(settings);
-        
-        // Close modal
-        hideSettingsModal();
         
     } catch (error) {
         console.error('❌ Error saving settings:', error);
@@ -3173,7 +3800,7 @@ async function saveUserSettings() {
     }
 }
 
-// Collect current settings from the modal
+// Collect current settings from UI - SIMPLIFIED
 function collectCurrentSettings() {
     const settings = {};
     
@@ -3185,36 +3812,13 @@ function collectCurrentSettings() {
     const moodOptions = document.querySelectorAll('.settings-mood-option.active');
     settings.moods = Array.from(moodOptions).map(option => option.dataset.mood);
     
-    // Collect slider values
-    const popularitySlider = document.getElementById('settings-popularity');
-    const librarySlider = document.getElementById('settings-library-ratio');
-    const maxQueueSlider = document.getElementById('max-queue-size');
-    settings.popularity = popularitySlider ? parseInt(popularitySlider.value) : 50;
-    settings.libraryRatio = librarySlider ? parseInt(librarySlider.value) : 50;
-    settings.maxQueueSize = maxQueueSlider ? parseInt(maxQueueSlider.value) : 50;
-    
-    // Collect checkbox states
-    const autoPlaylistToggle = document.getElementById('auto-playlist');
-    const backgroundToggle = document.getElementById('background-effects');
-    const skipShortToggle = document.getElementById('skip-short-tracks');
-    const notificationsToggle = document.getElementById('enable-notifications');
-    const visualizationToggle = document.getElementById('enable-visualization');
-    const crossfadeToggle = document.getElementById('crossfade-enabled');
-    
-    settings.autoPlaylist = autoPlaylistToggle ? autoPlaylistToggle.checked : true;
-    settings.backgroundEffects = backgroundToggle ? backgroundToggle.checked : true;
-    settings.skipShortTracks = skipShortToggle ? skipShortToggle.checked : false;
-    settings.enableNotifications = notificationsToggle ? notificationsToggle.checked : true;
-    settings.enableVisualization = visualizationToggle ? visualizationToggle.checked : true;
-    settings.crossfadeEnabled = crossfadeToggle ? crossfadeToggle.checked : false;
-    
     // Collect year range
     const yearFrom = document.getElementById('year-from');
     const yearTo = document.getElementById('year-to');
     settings.yearFrom = yearFrom ? parseInt(yearFrom.value) : 1950;
     settings.yearTo = yearTo ? parseInt(yearTo.value) : 2024;
     
-    // Collect shuffle type from settings modal
+    // Collect shuffle type
     const shuffleTypeSelect = document.getElementById('shuffle-type');
     settings.shuffleType = shuffleTypeSelect ? shuffleTypeSelect.value : 'true-random';
     
@@ -3265,20 +3869,38 @@ async function initializeSettings() {
     console.log('✅ Settings system initialized');
 }
 
-// Apply settings to the app
+// Apply settings to the app - SIMPLIFIED
 function applySettings(settings) {
     console.log('⚙️ Applying settings:', settings);
     
     // Apply shuffle type
     if (settings.shuffleType) {
         currentShuffleType = settings.shuffleType;
-        
-        // Update the main shuffle type selector if it exists
-        const mainShuffleSelect = document.getElementById('shuffle-type');
-        if (mainShuffleSelect) {
-            mainShuffleSelect.value = settings.shuffleType;
-        }
+        console.log('🔀 Shuffle type set to:', currentShuffleType);
     }
+    
+    // Store genres globally for track fetching functions
+    if (settings.genres) {
+        selectedGenres = settings.genres;
+        window.selectedGenres = settings.genres;
+        console.log('🎵 Genres set to:', settings.genres);
+    }
+    
+    // Store mood globally for track fetching functions
+    if (settings.moods && settings.moods.length > 0) {
+        selectedMood = settings.moods[0]; // Use first selected mood
+        window.selectedMood = settings.moods[0];
+        console.log('🎭 Mood set to:', settings.moods[0]);
+    }
+    
+    // Store year range globally
+    if (settings.yearFrom && settings.yearTo) {
+        window.userYearFrom = settings.yearFrom;
+        window.userYearTo = settings.yearTo;
+        console.log('📅 Year range set to:', settings.yearFrom, '-', settings.yearTo);
+    }
+    
+    console.log('✅ Core settings applied successfully');
 }
 
 // Load settings into the modal
@@ -3418,3 +4040,578 @@ function resetUserSettings() {
         showNotification('Failed to reset settings', 'error');
     }
 }
+
+// Show help modal
+function showHelpModal() {
+    if (window.monetization) {
+        window.monetization.showModal({
+            title: '🎵 True Shuffle Help',
+            content: `
+                <div class="help-content">
+                    <h3>Welcome to True Shuffle!</h3>
+                    <p>Experience truly random music discovery with advanced algorithms.</p>
+                    
+                    <h4>🎲 Shuffle Modes:</h4>
+                    <ul>
+                        <li><strong>True Random:</strong> Mathematically perfect random selection</li>
+                        <li><strong>Never Played:</strong> Only tracks you haven't heard</li>
+                        <li><strong>Mood Based:</strong> Music that matches your current vibe</li>
+                        <li><strong>Genre Mix:</strong> Blend your selected genres perfectly</li>
+                        <li><strong>No Repeats:</strong> Avoid recently played tracks</li>
+                    </ul>
+                    
+                    <h4>⚙️ Settings:</h4>
+                    <p>Click the settings button (⚙️) to customize your experience:</p>
+                    <ul>
+                        <li>Genre and mood preferences</li>
+                        <li>Year range filtering</li>
+                        <li>Audio and UI settings</li>
+                        <li>Premium features</li>
+                    </ul>
+                    
+                    <h4>🎧 Tips:</h4>
+                    <ul>
+                        <li>Try different shuffle modes for varied experiences</li>
+                        <li>Adjust discovery sensitivity in settings</li>
+                        <li>Use genre filters for focused discovery</li>
+                        <li>Enable auto-playlist to save discoveries</li>
+                    </ul>
+                </div>
+            `,
+            buttons: [
+                { text: 'Got it!', action: () => window.monetization.closeModal(), primary: true }
+            ],
+            customClass: 'help-modal'
+        });
+    } else {
+        alert('Help: Click the settings button (⚙️) to customize your experience. Try different shuffle modes for varied music discovery!');
+    }
+}
+
+// Debug function to check and show user profile
+window.debugShowProfile = function() {
+  console.log('🔍 Debug: Checking user profile status...');
+  
+  const userProfileElement = document.getElementById('user-profile');
+  const userImageElement = document.getElementById('user-image');
+  const userNameElement = document.getElementById('user-name');
+  const loginButton = document.getElementById('login-button');
+  
+  console.log('User profile element:', userProfileElement);
+  console.log('Access token exists:', !!accessToken);
+  console.log('User profile classes:', userProfileElement?.classList.toString());
+  console.log('User profile display:', userProfileElement?.style.display);
+  console.log('User name:', userNameElement?.textContent);
+  console.log('User image src:', userImageElement?.src);
+  
+  // Force show the profile if we have a token
+  if (accessToken && userProfileElement) {
+    console.log('✅ Forcing user profile to show...');
+    userProfileElement.classList.remove('hidden');
+    userProfileElement.style.display = 'flex';
+    
+    // Hide login button
+    if (loginButton) {
+      loginButton.classList.add('hidden');
+    }
+    
+    // Load user data if not already loaded
+    if (!userImageElement?.src || userImageElement.src === '' || userNameElement?.textContent === 'Loading...') {
+      console.log('🔄 Loading user data...');
+      loadUserData();
+    }
+    
+    return true;
+  } else {
+    console.log('❌ Cannot show profile:');
+    console.log('- Access token:', !!accessToken);
+    console.log('- User profile element:', !!userProfileElement);
+    return false;
+  }
+};
+
+// Debug function to test settings functionality
+window.debugTestSettings = function() {
+  console.log('🔧 Testing settings functionality...');
+  
+  // Test applying settings
+  const testSettings = {
+    shuffleType: 'genre-balanced',
+    genres: ['pop', 'rock', 'jazz'],
+    moods: ['energetic'],
+    backgroundEffects: false,
+    enableVisualization: true,
+    darkMode: true
+  };
+  
+  console.log('Applying test settings:', testSettings);
+  applySettings(testSettings);
+  
+  // Check if settings were applied
+  console.log('Current shuffle type:', currentShuffleType);
+  console.log('Body classes:', document.body.className);
+  console.log('Selected genres:', window.selectedGenres);
+  console.log('Selected mood:', window.selectedMood);
+  
+  return true;
+};
+
+// Debug function to force logout
+window.debugLogout = function() {
+  console.log('🔴 Debug: Forcing logout...');
+  logout();
+};
+
+// Debug function to check authentication status
+window.debugAuthStatus = function() {
+  console.log('🔐 Current Authentication Status:');
+  console.log('- Access Token:', !!accessToken);
+  console.log('- Refresh Token:', !!refreshToken);
+  console.log('- Token Expiry:', localStorage.getItem('spotify_token_expires'));
+  console.log('- Current User ID:', currentUserId);
+  console.log('- Current User:', currentUser);
+  
+  const now = Date.now();
+  const expiry = localStorage.getItem('spotify_token_expires');
+  if (expiry) {
+    const timeLeft = parseInt(expiry) - now;
+    console.log('- Time until expiry:', Math.round(timeLeft / 1000 / 60), 'minutes');
+  }
+  
+  return {
+    hasToken: !!accessToken,
+    hasRefresh: !!refreshToken,
+    userId: currentUserId,
+    timeLeft: expiry ? Math.round((parseInt(expiry) - now) / 1000 / 60) : 0
+  };
+};
+
+// Debug function to test auto-advance functionality
+window.debugAutoAdvance = function() {
+  console.log('🧪 Testing auto-advance functionality...');
+  console.log('Current queue status:');
+  console.log('- Queue length:', shuffledTracks.length);
+  console.log('- Current index:', currentTrackIndex);
+  console.log('- Current track:', currentTrack?.name);
+  console.log('- Device ID:', deviceId);
+  console.log('- Player ready:', !!spotifyPlayer);
+  
+  if (shuffledTracks.length > 0) {
+    console.log('- Next track would be:', shuffledTracks[currentTrackIndex + 1]?.name || 'End of queue');
+  }
+  
+  // Test manual advance
+  if (shuffledTracks.length > 0) {
+    console.log('🔄 Manually testing next track...');
+    playNextTrack();
+  } else {
+    console.log('⚠️ No tracks in queue to test with');
+  }
+};
+
+// Debug function to simulate track completion
+window.debugTrackEnd = function() {
+  console.log('🏁 Simulating track completion...');
+  
+  if (currentTrack) {
+    console.log('Simulating completion of:', currentTrack.name);
+    
+    // Simulate the track completion logic
+    setTimeout(() => {
+      playNextTrack();
+    }, 300);
+  } else {
+    console.log('⚠️ No current track to simulate completion for');
+  }
+};
+
+// Debug function to test all settings functionality
+window.debugTestAllSettings = function() {
+  console.log('🧪 Testing ALL settings functionality...');
+  
+  // Test 1: Load current settings
+  let userSettings = {};
+  try {
+      const storedSettings = localStorage.getItem('trueShuffleSettings');
+      if (storedSettings) {
+          userSettings = JSON.parse(storedSettings);
+      }
+  } catch (error) {
+      console.warn('Could not load user settings');
+  }
+  
+  console.log('📋 Current Settings:', userSettings);
+  
+  // Test 2: Apply test settings to verify they work
+  const testSettings = {
+    shuffleType: 'genre-mix',
+    genres: ['rock', 'jazz', 'electronic'],
+    moods: ['energetic'],
+    yearFrom: 2000,
+    yearTo: 2020,
+    popularity: 70,
+    backgroundEffects: true,
+    enableVisualization: true,
+    darkMode: true,
+    volume: 80
+  };
+  
+  console.log('🔬 Applying test settings:', testSettings);
+  
+  // Save test settings
+  localStorage.setItem('trueShuffleSettings', JSON.stringify(testSettings));
+  
+  // Apply them to the app
+  applySettings(testSettings);
+  
+  // Test 3: Verify settings were applied
+  console.log('✅ Verifying settings application:');
+  console.log('- Current shuffle type:', currentShuffleType);
+  console.log('- Body classes:', document.body.className);
+  console.log('- Selected genres:', window.selectedGenres || 'Not set');
+  console.log('- Selected mood:', window.selectedMood || 'Not set');
+  
+  // Test 4: Test genre filter functionality
+  console.log('🎵 Testing genre filter...');
+  if (testSettings.genres && testSettings.genres.length > 0) {
+    const randomGenre = testSettings.genres[Math.floor(Math.random() * testSettings.genres.length)];
+    console.log(`- Would filter by genre: ${randomGenre}`);
+  }
+  
+  // Test 5: Test year filter functionality
+  console.log('📅 Testing year filter...');
+  if (testSettings.yearFrom && testSettings.yearTo) {
+    const yearQuery = testSettings.yearFrom === testSettings.yearTo ? 
+      ` year:${testSettings.yearFrom}` : 
+      ` year:${testSettings.yearFrom}-${testSettings.yearTo}`;
+    console.log(`- Would filter by years: ${yearQuery}`);
+  }
+  
+  // Test 6: Test popularity filter
+  console.log('⭐ Testing popularity filter...');
+  console.log(`- Would filter tracks with popularity > ${testSettings.popularity}`);
+  
+  // Test 7: Test a mock track search with settings
+  console.log('🔍 Testing mock search with settings...');
+  let mockSearchQuery = 'energetic';
+  
+  if (testSettings.yearFrom && testSettings.yearTo) {
+    mockSearchQuery += ` year:${testSettings.yearFrom}-${testSettings.yearTo}`;
+  }
+  
+  if (testSettings.genres && testSettings.genres.length > 0) {
+    const randomGenre = testSettings.genres[0];
+    mockSearchQuery += ` genre:${randomGenre}`;
+  }
+  
+  console.log(`- Mock search query would be: "${mockSearchQuery}"`);
+  
+  // Test 8: Verify UI elements reflect settings
+  console.log('🎨 Testing UI updates...');
+  
+  // Check genre buttons
+  const genreButtons = document.querySelectorAll('.genre-btn, .settings-genre-btn');
+  let activeGenres = [];
+  genreButtons.forEach(btn => {
+    if (btn.classList.contains('selected') || btn.classList.contains('active')) {
+      activeGenres.push(btn.dataset.genre || btn.textContent);
+    }
+  });
+  console.log('- Active genre buttons:', activeGenres);
+  
+  // Check mood buttons
+  const moodButtons = document.querySelectorAll('.mood-btn, .settings-mood-option');
+  let activeMoods = [];
+  moodButtons.forEach(btn => {
+    if (btn.classList.contains('active')) {
+      activeMoods.push(btn.dataset.mood || btn.textContent);
+    }
+  });
+  console.log('- Active mood buttons:', activeMoods);
+  
+  // Return summary
+  const results = {
+    settingsLoaded: !!Object.keys(userSettings).length,
+    genresApplied: testSettings.genres.length > 0,
+    moodsApplied: testSettings.moods.length > 0,
+    yearsApplied: !!(testSettings.yearFrom && testSettings.yearTo),
+    popularityApplied: !!testSettings.popularity,
+    uiUpdated: document.body.className.includes('no-bg-effects') !== testSettings.backgroundEffects,
+    mockSearchQuery: mockSearchQuery
+  };
+  
+  console.log('📊 Test Results:', results);
+  
+  return results;
+};
+
+// Debug function to test specific setting category
+window.debugTestGenreSettings = function() {
+  console.log('🎸 Testing genre settings specifically...');
+  
+  const testGenres = ['rock', 'jazz', 'electronic'];
+  
+  // Set genres in settings
+  const currentSettings = JSON.parse(localStorage.getItem('trueShuffleSettings') || '{}');
+  currentSettings.genres = testGenres;
+  localStorage.setItem('trueShuffleSettings', JSON.stringify(currentSettings));
+  
+  // Apply settings
+  applySettings(currentSettings);
+  
+  // Test genre search
+  console.log('Testing genre-specific search...');
+  const randomGenre = testGenres[Math.floor(Math.random() * testGenres.length)];
+  console.log(`Would search for genre: ${randomGenre}`);
+  
+  return { genres: testGenres, selectedGenre: randomGenre };
+};
+
+// Debug function to test specific mood settings
+window.debugTestMoodSettings = function() {
+  console.log('🎭 Testing mood settings specifically...');
+  
+  const testMoods = ['energetic'];
+  
+  // Set moods in settings
+  const currentSettings = JSON.parse(localStorage.getItem('trueShuffleSettings') || '{}');
+  currentSettings.moods = testMoods;
+  localStorage.setItem('trueShuffleSettings', JSON.stringify(currentSettings));
+  
+  // Apply settings
+  applySettings(currentSettings);
+  
+  // Test mood search terms
+  const moodSearchTerms = {
+    energetic: ['energetic', 'pump up', 'workout', 'high energy', 'intense', 'power']
+  };
+  
+  const searchTerms = moodSearchTerms[testMoods[0]] || ['music'];
+  console.log(`Would search for mood terms:`, searchTerms);
+  
+  return { moods: testMoods, searchTerms: searchTerms };
+};
+
+// Debug function to test year settings
+window.debugTestYearSettings = function() {
+  console.log('📅 Testing year settings specifically...');
+  
+  const testYearFrom = 2000;
+  const testYearTo = 2020;
+  
+  // Set years in settings
+  const currentSettings = JSON.parse(localStorage.getItem('trueShuffleSettings') || '{}');
+  currentSettings.yearFrom = testYearFrom;
+  currentSettings.yearTo = testYearTo;
+  localStorage.setItem('trueShuffleSettings', JSON.stringify(currentSettings));
+  
+  // Apply settings
+  applySettings(currentSettings);
+  
+  // Test year query
+  const yearQuery = testYearFrom === testYearTo ? 
+    ` year:${testYearFrom}` : 
+    ` year:${testYearFrom}-${testYearTo}`;
+  
+  console.log(`Would apply year filter: ${yearQuery}`);
+  
+  return { yearFrom: testYearFrom, yearTo: testYearTo, query: yearQuery };
+};
+
+// Debug function to check what's happening with settings
+window.debugSettingsFlow = function() {
+  console.log('🔍 Debugging settings flow...');
+  
+  // Check what's saved in localStorage
+  const savedSettings = localStorage.getItem('trueShuffleSettings');
+  console.log('💾 Raw localStorage settings:', savedSettings);
+  
+  if (savedSettings) {
+    try {
+      const parsedSettings = JSON.parse(savedSettings);
+      console.log('📋 Parsed settings:', parsedSettings);
+    } catch (error) {
+      console.error('❌ Error parsing settings:', error);
+    }
+  }
+  
+  // Check what loadUserSettings returns
+  loadUserSettings().then(settings => {
+    console.log('📖 loadUserSettings() returned:', settings);
+    
+    // Check what's actually applied
+    console.log('🎯 Current global variables:');
+    console.log('- currentShuffleType:', currentShuffleType);
+    console.log('- selectedGenres:', selectedGenres);
+    console.log('- selectedMood:', selectedMood);
+    console.log('- window.selectedGenres:', window.selectedGenres);
+    console.log('- window.selectedMood:', window.selectedMood);
+    
+    // Check body classes
+    console.log('🎨 Body classes:', document.body.className);
+    
+    // Check if settings modal exists and what it shows
+    const genreButtons = document.querySelectorAll('.settings-genre-btn.active');
+    const moodButtons = document.querySelectorAll('.settings-mood-option.active');
+    
+    console.log('🎵 Active genre buttons in settings:', 
+      Array.from(genreButtons).map(btn => btn.dataset.genre || btn.textContent));
+    console.log('🎭 Active mood buttons in settings:', 
+      Array.from(moodButtons).map(btn => btn.dataset.mood || btn.textContent));
+  });
+  
+  return 'Debug complete - check console for results';
+};
+
+// Debug function to save and test settings
+window.debugSaveTestSettings = function() {
+  console.log('💾 Testing settings save/load cycle...');
+  
+  const testSettings = {
+    genres: ['rock', 'jazz'],
+    moods: ['energetic'],
+    yearFrom: 2000,
+    yearTo: 2020,
+    popularity: 60,
+    shuffleType: 'genre-mix'
+  };
+  
+  console.log('🔬 Saving test settings:', testSettings);
+  
+  // Save directly to localStorage
+  localStorage.setItem('trueShuffleSettings', JSON.stringify(testSettings));
+  
+  // Test immediate load
+  const loaded = JSON.parse(localStorage.getItem('trueShuffleSettings'));
+  console.log('📖 Immediately loaded:', loaded);
+  
+  // Apply settings
+  console.log('🔄 Applying test settings...');
+  applySettings(testSettings);
+  
+  // Check if they were applied
+  console.log('✅ After applying:');
+  console.log('- currentShuffleType:', currentShuffleType);
+  console.log('- window.selectedGenres:', window.selectedGenres);
+  console.log('- window.selectedMood:', window.selectedMood);
+  
+  return testSettings;
+};
+
+// Debug function to actually test track fetching with settings
+window.debugTrackFetchWithSettings = async function() {
+  console.log('🎵 Testing track fetching with settings...');
+  
+  // First set some test settings
+  const testSettings = {
+    genres: ['rock', 'jazz'],
+    moods: ['energetic'],
+    yearFrom: 2000,
+    yearTo: 2020,
+    popularity: 60
+  };
+  
+  // Save and apply
+  localStorage.setItem('trueShuffleSettings', JSON.stringify(testSettings));
+  applySettings(testSettings);
+  
+  console.log('🔍 Testing fetchTrulyRandomTracks with settings...');
+  
+  // Call fetchTrulyRandomTracks and see what settings it actually uses
+  try {
+    const tracks = await fetchTrulyRandomTracks();
+    console.log(`🎵 Fetched ${tracks.length} tracks`);
+    if (tracks.length > 0) {
+      console.log('Sample track:', tracks[0].name, 'by', tracks[0].artists[0].name);
+    }
+  } catch (error) {
+    console.error('❌ Error fetching tracks:', error);
+  }
+  
+  return 'Track fetch test complete';
+};
+
+console.log('🛠️ Settings debugging functions available:');
+console.log('- debugSettingsFlow() - Check settings save/load process');
+console.log('- debugSaveTestSettings() - Test saving and applying settings');
+console.log('- debugTrackFetchWithSettings() - Test track fetching with settings');
+
+// Simple test function to verify year settings work
+window.testYearSettings = async function(yearFrom, yearTo) {
+  console.log(`🧪 Testing year range: ${yearFrom} - ${yearTo}`);
+  
+  // Set the year settings
+  const testSettings = {
+    genres: [],
+    moods: [],
+    yearFrom: yearFrom,
+    yearTo: yearTo,
+    shuffleType: 'true-random'
+  };
+  
+  // Save settings
+  localStorage.setItem('trueShuffleSettings', JSON.stringify(testSettings));
+  
+  // Apply settings
+  applySettings(testSettings);
+  
+  console.log('🔧 Settings saved and applied');
+  console.log('- Year range:', window.userYearFrom, '-', window.userYearTo);
+  
+  // Test a single search to see if year filter is applied
+  const testQuery = 'love';
+  let searchQuery = `"${testQuery}"`;
+  
+  if (yearFrom && yearTo) {
+    if (yearFrom === yearTo) {
+      searchQuery += ` year:${yearFrom}`;
+    } else {
+      searchQuery += ` year:${yearFrom}-${yearTo}`;
+    }
+  }
+  
+  console.log(`🔍 Test search query: "${searchQuery}"`);
+  
+  try {
+    const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=track&limit=10&offset=0`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log(`📊 Found ${data.tracks.items.length} tracks`);
+      
+      if (data.tracks.items.length > 0) {
+        console.log('📋 Sample results:');
+        data.tracks.items.slice(0, 5).forEach(track => {
+          console.log(`- "${track.name}" by ${track.artists[0].name} (${track.album.release_date})`);
+        });
+      }
+    } else {
+      console.error('❌ Search failed:', response.status);
+    }
+  } catch (error) {
+    console.error('❌ Error testing search:', error);
+  }
+  
+  return `Year range ${yearFrom}-${yearTo} test complete`;
+};
+
+// Test specific decades
+window.test90sMusic = function() {
+  return testYearSettings(1990, 1999);
+};
+
+window.test2000sMusic = function() {
+  return testYearSettings(2000, 2009);
+};
+
+window.testModernMusic = function() {
+  return testYearSettings(2020, 2024);
+};
+
+console.log('🛠️ Year testing functions available:');
+console.log('- testYearSettings(yearFrom, yearTo) - Test specific year range');
+console.log('- test90sMusic() - Test 1990s music');
+console.log('- test2000sMusic() - Test 2000s music');
+console.log('- testModernMusic() - Test 2020-2024 music');

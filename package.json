@@ -1,12 +1,14 @@
 {
   "name": "true-shuffle",
-  "version": "0.1.0",
+  "version": "2.1.0",
   "description": "A genuinely random playlist shuffling application for Spotify",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "build": "npm run build:css",
     "build:css": "tailwindcss -i ./public/tailwind.css -o ./public/styles.css --watch",
+    "build:production": "tailwindcss -i ./public/tailwind.css -o ./public/styles.css --minify",
     "dev:all": "concurrently \"npm run dev\" \"npm run build:css\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -19,14 +21,19 @@
     "shuffle",
     "music",
     "random",
-    "playlist"
+    "playlist",
+    "discovery",
+    "algorithm"
   ],
-  "author": "Your Name",
+  "author": "Daniel Ennis",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/yourusername/true-shuffle/issues"
   },
   "homepage": "https://github.com/yourusername/true-shuffle#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
   "dependencies": {
     "dotenv": "^16.5.0",
     "express": "^4.21.2",
