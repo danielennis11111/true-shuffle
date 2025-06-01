@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 
 // Initialize Spotify API
 const spotifyApi = new SpotifyWebApi({
-  clientId: process.env.SPOTIFY_CLIENT_ID || '69889249cd33426ab241d33713e55fad',
+  clientId: process.env.SPOTIFY_CLIENT_ID,
   clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
   redirectUri: process.env.REDIRECT_URI || 'http://127.0.0.1:3000/callback'
 });

@@ -385,7 +385,7 @@ function redirectToSpotifyAuth() {
     console.log('🧹 Clearing existing tokens...');
     clearAuthTokens();
     
-    const clientId = '69889249cd33426ab241d33713e55fad';
+    const clientId = window.SPOTIFY_CLIENT_ID || 'ENVIRONMENT_VARIABLE_REQUIRED';
     const redirectUri = 'http://127.0.0.1:3000/callback';
     const scopes = [
       'user-read-private',
