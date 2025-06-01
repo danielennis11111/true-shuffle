@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>True Shuffle 2.0</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+    <script src="color-thief.min.js"></script>
+</head>
+<body>
+    <!-- Background -->
+    <div id="app-background"></div>
+    
+    <!-- Loading overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-content">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Loading...</p>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <i class="fas fa-random"></i>
+                <h1>True Shuffle</h1>
+            </div>
+            
+            <div id="auth-section" class="auth-section">
+                <button id="login-button" class="login-btn">
+                    Connect Spotify
+                </button>
+                
+                <div id="user-profile" class="user-profile hidden">
+                    <img id="user-image" src="" alt="User">
+                    <span id="user-name"></span>
+                    <button id="logout-button" class="logout-btn">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Auth message -->
+    <div id="auth-message" class="auth-message hidden">
+        <div class="auth-content">
+            <i class="fas fa-music"></i>
+            <h2>Connect Your Spotify</h2>
+            <p>Connect your Spotify account to discover truly random music</p>
+            <button id="auth-login-button" class="connect-btn">
+                Connect Spotify Account
+            </button>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <main id="main-content" class="main-content">
+        
+        <!-- Discovery Configuration -->
+        <section id="config-section" class="config-section">
+            <div class="config-container">
+                <h2>Choose Your Discovery Mode</h2>
+                
+                <div class="discovery-modes">
+                    <select id="shuffle-type" class="mode-select">
+                        <option value="true-random">🎲 True Random</option>
+                        <option value="never-played">🌟 Never Played</option>
+                        <option value="genre-mix">🎨 Mix Genres</option>
+                        <option value="genre-balanced">⚖️ Genre Balanced</option>
+                        <option value="no-repeats">🚫 No Repeats</option>
+                        <option value="mood-based">🎭 Mood Based</option>
+                    </select>
+                </div>
+
+                <!-- Mood Selection -->
+                <div id="mood-selector" class="mood-selector hidden">
+                    <h3>Select Mood</h3>
+                    <div class="mood-grid">
+                        <button class="mood-btn" data-mood="happy">
+                            <i class="fas fa-sun"></i>
+                            Happy
+                        </button>
+                        <button class="mood-btn" data-mood="chill">
+                            <i class="fas fa-leaf"></i>
+                            Chill
+                        </button>
+                        <button class="mood-btn" data-mood="energetic">
+                            <i class="fas fa-bolt"></i>
+                            Energetic
+                        </button>
+                        <button class="mood-btn" data-mood="melancholic">
+                            <i class="fas fa-cloud-rain"></i>
+                            Sad
+                        </button>
+                        <button class="mood-btn" data-mood="angry">
+                            <i class="fas fa-fire"></i>
+                            Angry
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Genre Selection -->
+                <div id="genre-selector" class="genre-selector hidden">
+                    <h3>Select Genres (2-6)</h3>
+                    <div class="genre-grid">
+                        <button class="genre-btn" data-genre="electronic">Electronic</button>
+                        <button class="genre-btn" data-genre="rock">Rock</button>
+                        <button class="genre-btn" data-genre="hip-hop">Hip Hop</button>
+                        <button class="genre-btn" data-genre="jazz">Jazz</button>
+                        <button class="genre-btn" data-genre="classical">Classical</button>
+                        <button class="genre-btn" data-genre="folk">Folk</button>
+                    </div>
+                </div>
+
+                <button id="discover-btn" class="discover-btn">
+                    <i class="fas fa-play"></i>
+                    Start Discovery
+                </button>
+            </div>
+        </section>
+
+        <!-- Vinyl Player -->
+        <section id="player-section" class="player-section hidden">
+            <div class="player-container">
+                
+                <!-- Vinyl Record Player -->
+                <div class="vinyl-player">
+                    <div id="vinyl-record" class="vinyl-record">
+                        <div class="record-disc">
+                            <!-- Album Cover -->
+                            <div class="album-cover">
+                                <img id="album-image" src="" alt="Album Cover">
+                            </div>
+                            <!-- Center Label -->
+                            <div class="center-label">
+                                <div class="label-text">STEREO</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Track Info -->
+                <div class="track-info">
+                    <h3 id="track-name">Track Name</h3>
+                    <p id="artist-name">Artist Name</p>
+                    <p id="album-name">Album Name</p>
+                </div>
+
+                <!-- Player Controls -->
+                <div class="player-controls">
+                    <button id="prev-track" class="control-btn">
+                        <i class="fas fa-step-backward"></i>
+                    </button>
+                    <button id="play-pause" class="control-btn play-btn">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <button id="next-track" class="control-btn">
+                        <i class="fas fa-step-forward"></i>
+                    </button>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="progress-container">
+                    <span id="current-time">0:00</span>
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                    <span id="total-time">0:00</span>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button id="like-button" class="action-btn">
+                        <i class="far fa-heart"></i>
+                    </button>
+                    <button id="discover-more-btn" class="action-btn primary">
+                        Discover More
+                    </button>
+                    <button id="back-to-config-btn" class="action-btn">
+                        Back to Config
+                    </button>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <script src="shuffle.js"></script>
+    <script src="app.js"></script>
+</body>
+</html> 

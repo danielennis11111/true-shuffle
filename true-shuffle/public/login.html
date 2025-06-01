@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>True Shuffle - Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #1DB954;
+            --background-color: #121212;
+            --text-color: #FFFFFF;
+            --secondary-color: #282828;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1DB954 0%, #191414 100%);
+        }
+
+        .login-container {
+            text-align: center;
+            padding: 3rem;
+            background-color: rgba(40, 40, 40, 0.9);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 90%;
+            backdrop-filter: blur(10px);
+        }
+
+        .logo {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--primary-color);
+            border-radius: 50%;
+            box-shadow: 0 4px 20px rgba(29, 185, 84, 0.3);
+        }
+
+        .logo i {
+            font-size: 4rem;
+            color: white;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .tagline {
+            font-size: 1.2rem;
+            margin-bottom: 2.5rem;
+            color: #B3B3B3;
+        }
+
+        .login-button {
+            background-color: var(--primary-color);
+            color: var(--text-color);
+            border: none;
+            padding: 1.2rem 2.5rem;
+            font-size: 1.2rem;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin: 0 auto;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(29, 185, 84, 0.3);
+        }
+
+        .login-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(29, 185, 84, 0.4);
+            background-color: #1ed760;
+        }
+
+        .login-button i {
+            font-size: 1.5rem;
+        }
+
+        .features {
+            margin-top: 3rem;
+            text-align: left;
+            padding: 0 1rem;
+        }
+
+        .features h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--primary-color);
+            text-align: center;
+        }
+
+        .features ul {
+            list-style: none;
+        }
+
+        .features li {
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.1rem;
+        }
+
+        .features i {
+            color: var(--primary-color);
+            font-size: 1.2rem;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .loading {
+            display: none;
+            margin-top: 1.5rem;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--primary-color);
+            border-top: 4px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <i class="fas fa-random"></i>
+        </div>
+        <h1>True Shuffle</h1>
+        <p class="tagline">Experience truly random music discovery</p>
+        
+        <button id="login-button" class="login-button">
+            <i class="fab fa-spotify"></i>
+            Connect with Spotify
+        </button>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Connecting to Spotify...</p>
+        </div>
+
+        <div class="features">
+            <h2>Features</h2>
+            <ul>
+                <li>
+                    <i class="fas fa-random"></i>
+                    <span>True random shuffling algorithm</span>
+                </li>
+                <li>
+                    <i class="fas fa-music"></i>
+                    <span>Discover new music from all of Spotify</span>
+                </li>
+                <li>
+                    <i class="fas fa-heart"></i>
+                    <span>Save your discoveries to playlists</span>
+                </li>
+                <li>
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Track your music discovery stats</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('login-button').addEventListener('click', () => {
+            const loading = document.getElementById('loading');
+            loading.classList.add('active');
+            
+            // Get the auth URL from the config
+            const config = {
+                clientId: '69889249cd33426ab241d33713e55fad',
+                redirectUri: 'https://true-shuffle.surge.sh/callback',
+                scopes: [
+                    'user-read-private',
+                    'user-read-email',
+                    'user-read-playback-state',
+                    'user-modify-playback-state',
+                    'user-read-currently-playing',
+                    'user-library-read',
+                    'user-library-modify',
+                    'playlist-read-private',
+                    'playlist-modify-private',
+                    'playlist-modify-public'
+                ]
+            };
+
+            const params = new URLSearchParams({
+                client_id: config.clientId,
+                response_type: 'token',
+                redirect_uri: config.redirectUri,
+                scope: config.scopes.join(' '),
+                show_dialog: true
+            });
+
+            window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
+        });
+
+        // Check if we're handling a callback
+        if (window.location.hash) {
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+
+            if (params.has('access_token')) {
+                // Store the token
+                localStorage.setItem('spotify_access_token', params.get('access_token'));
+                localStorage.setItem('spotify_token_expiration_time', 
+                    (Date.now() + (parseInt(params.get('expires_in')) * 1000)).toString());
+
+                // Redirect to main app
+                window.location.href = '/app';
+            }
+        }
+
+        // Check if we're already authenticated
+        const token = localStorage.getItem('spotify_access_token');
+        const tokenExpiration = localStorage.getItem('spotify_token_expiration_time');
+        
+        if (token && tokenExpiration && Date.now() < parseInt(tokenExpiration)) {
+            // Token is valid, redirect to app
+            window.location.href = '/app';
+        }
+    </script>
+</body>
+</html> 

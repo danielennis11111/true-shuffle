@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>True Shuffle - Better Spotify Playlist Shuffling</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-spotify-dark text-white min-h-screen font-sans">
+    <div class="container mx-auto px-4 py-8 flex flex-col min-h-screen">
+        <header class="py-6 text-center">
+            <div class="flex items-center justify-center space-x-2 mb-4">
+                <i class="fas fa-random text-spotify-green text-3xl"></i>
+                <h1 class="text-3xl md:text-4xl font-bold">True Shuffle</h1>
+            </div>
+            <p class="text-spotify-text text-lg md:text-xl max-w-2xl mx-auto">
+                The genuinely random playlist shuffling experience your music deserves
+            </p>
+        </header>
+
+        <main class="flex-grow flex flex-col items-center justify-center py-8">
+            <div class="card max-w-md w-full mx-auto bg-spotify-light p-8 rounded-xl shadow-lg">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold mb-4">Experience True Randomness</h2>
+                    <p class="text-spotify-text">Connect with Spotify to start enjoying genuinely random shuffling of your playlists.</p>
+                </div>
+                
+                <div class="flex flex-col space-y-4">
+                    <div class="bg-spotify-black bg-opacity-40 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-2 flex items-center">
+                            <i class="fas fa-random text-spotify-green mr-2"></i>
+                            True Random
+                        </h3>
+                        <p class="text-spotify-text text-sm">Mathematically perfect randomization using the Fisher-Yates algorithm</p>
+                    </div>
+                    
+                    <div class="bg-spotify-black bg-opacity-40 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-2 flex items-center">
+                            <i class="fas fa-guitar text-spotify-green mr-2"></i>
+                            Genre Balance
+                        </h3>
+                        <p class="text-spotify-text text-sm">Keep your listening experience diverse with genre-balanced shuffling</p>
+                    </div>
+                    
+                    <div class="bg-spotify-black bg-opacity-40 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-2 flex items-center">
+                            <i class="fas fa-history text-spotify-green mr-2"></i>
+                            No Repeats
+                        </h3>
+                        <p class="text-spotify-text text-sm">Avoid recently played tracks for a fresher listening experience</p>
+                    </div>
+                </div>
+                
+                <div class="mt-8 flex justify-center">
+                    <a href="/login" class="btn btn-spotify flex items-center justify-center w-full py-3">
+                        <i class="fab fa-spotify mr-2"></i>
+                        Connect with Spotify
+                    </a>
+                </div>
+                
+                <p class="text-xs text-center mt-4 text-spotify-text">
+                    Premium Spotify account required for full functionality
+                </p>
+            </div>
+        </main>
+
+        <footer class="py-6 text-center text-spotify-text">
+            <p class="text-sm">&copy; 2025 True Shuffle - Not affiliated with Spotify</p>
+        </footer>
+    </div>
+
+    <script>
+        // Check if there's an error parameter in the URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const error = urlParams.get('error');
+        if (error) {
+            alert(`Login error: ${error}`);
+        }
+    </script>
+</body>
+</html> 
