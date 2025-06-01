@@ -539,20 +539,18 @@ function updateShuffleDescription(type) {
   let description = '';
   
   switch(type) {
-    case 'advanced-true-shuffle':
-      description = '<p><strong>Advanced True Shuffle</strong> begins with a song you\'ve liked but haven\'t heard in a while, then builds a continuously growing pool of tracks for an improved, truly random experience. Includes crossfade between songs and avoids repeats.</p>';
-      break;
     case 'true-shuffle-all':
       description = '<p><strong>True Shuffle All</strong> discovers tracks from the entire Spotify catalog using advanced randomization techniques for a diverse musical experience.</p>';
       break;
     case 'true-shuffle-library':
-      description = '<p><strong>True Shuffle Library</strong> focuses on your saved songs, playlists and followed artists for a more personalized but still truly random experience.</p>';
+      description = '<p><strong>True Shuffle Library</strong> starts with songs you\'ve liked but haven\'t heard in a while, then continues with truly random tracks from your library. Includes smooth crossfade between songs and avoids repeating tracks.</p>';
       break;
     default:
       description = '<p>Select a shuffle mode to begin your musical journey.</p>';
   }
   
   shuffleDescription.innerHTML = description;
+  shuffleDescription.classList.remove('hidden');
 }
 
 // Redirect to Spotify authorization page
@@ -843,42 +841,27 @@ async function fetchRecommendations() {
     showLoading();
     let tracks = [];
     
-    // Check if we should use the advanced algorithm
-    if (currentShuffleType === 'advanced-true-shuffle') {
-      console.log('🚀 Using Advanced True Shuffle Algorithm...');
-      tracks = await advancedTrueShuffleAlgorithm();
-      
-      // Enable crossfade for smoother transitions
-      enableCrossfade();
-      
-    } else {
-      // Use regular shuffle algorithms
-      switch(currentShuffleType) {
-        case 'true-shuffle-all':
-          tracks = await fetchTrueShuffleAllSpotify();
-          break;
-        case 'true-shuffle-library':
-          tracks = await fetchTrueShuffleMyLibrary();
-          break;
-        default:
-          console.warn(`⚠️ Unknown shuffle type: ${currentShuffleType}, falling back to true-shuffle-all`);
-          tracks = await fetchTrueShuffleAllSpotify();
-      }
+    // Use regular shuffle algorithms
+    switch(currentShuffleType) {
+      case 'true-shuffle-all':
+        tracks = await fetchTrueShuffleAllSpotify();
+        break;
+      case 'true-shuffle-library':
+        tracks = await fetchTrueShuffleMyLibrary();
+        // Enable crossfade for library mode
+        enableCrossfade();
+        break;
+      default:
+        console.warn(`⚠️ Unknown shuffle type: ${currentShuffleType}, falling back to true-shuffle-all`);
+        tracks = await fetchTrueShuffleAllSpotify();
     }
     
     // Assign tracks to shuffledTracks and shuffle them
     if (tracks && tracks.length > 0) {
       console.log(`✅ Loaded ${tracks.length} tracks for ${getShuffleDisplayName(currentShuffleType)}`);
       
-      // Use the appropriate shuffle algorithm based on settings
-      if (currentShuffleType === 'advanced-true-shuffle') {
-        // Advanced algorithm already handles the shuffling
-        shuffledTracks = [...tracks];
-      } else {
-        // Apply cryptographic shuffle for better randomization
-        shuffledTracks = cryptographicShuffle([...tracks]);
-      }
-      
+      // Apply cryptographic shuffle for better randomization
+      shuffledTracks = cryptographicShuffle([...tracks]);
       currentTrackIndex = 0;
       
       // Start playing the first track
@@ -2235,29 +2218,18 @@ function playNextTrack() {
   // Move to next track
   currentTrackIndex++;
   
-  // For advanced algorithm, we might need to grow the pool when getting low
-  if (currentShuffleType === 'advanced-true-shuffle' && 
+  // For library mode, we might need more tracks when getting low
+  if (currentShuffleType === 'true-shuffle-library' && 
       currentTrackIndex >= shuffledTracks.length - 5) {
-    console.log('⚠️ Track pool running low, continuing to grow in background...');
-    // The growTrackPool function will continue to run in the background
-    // and add more tracks to shuffledTracks as they're discovered
+    console.log('⚠️ Track pool running low, will fetch more soon...');
   }
   
   // If we've reached the end, get more tracks
   if (currentTrackIndex >= shuffledTracks.length) {
     console.log('📭 Reached end of queue, getting more tracks...');
-    
-    if (currentShuffleType === 'advanced-true-shuffle') {
-      // For advanced shuffle, we just reset to the beginning of current tracks
-      // while we wait for more tracks to be loaded in the background
-      console.log('🔄 Temporarily cycling back to start of current pool while growing new tracks...');
-      currentTrackIndex = 0;
-    } else {
-      // For other shuffle types, fetch a new set of tracks
-      currentTrackIndex = 0; // Reset to start while we load new tracks
-      fetchRecommendations();
-      return;
-    }
+    currentTrackIndex = 0; // Reset to start while we load new tracks
+    fetchRecommendations();
+    return;
   }
   
   // Play the current track
@@ -5637,41 +5609,147 @@ async function fetchTrueShuffleMyLibrary() {
   console.log('📚 Fetching tracks from your library with true randomization...');
   
   try {
-    const allTracks = [];
-    const usedTrackIds = new Set();
-    const maxResults = 50;
+    // Track IDs that have been recently heard (to avoid repeats)
+    const heardTrackIds = new Set();
     
-    // Strategy 1: Get user's saved tracks (library)
-    console.log('💿 Strategy 1: Fetching from saved tracks...');
+    // Load "Heard on True Shuffle" playlist tracks to avoid repeats
+    try {
+      const heardPlaylist = playlistCache.heardOnTrueShuffle;
+      if (heardPlaylist && heardPlaylist.tracks && heardPlaylist.tracks.items) {
+        console.log(`ℹ️ Found ${heardPlaylist.tracks.items.length} tracks in "Heard on True Shuffle" playlist`);
+        heardPlaylist.tracks.items.forEach(item => {
+          if (item.track && item.track.id) {
+            heardTrackIds.add(item.track.id);
+          }
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error loading heard tracks:', error);
+    }
+    
+    // Step 1: Find the first song - a liked song not heard in a while
+    let firstTrack = null;
+    console.log('🔍 Finding first track from your liked songs...');
+    
+    try {
+      // Get user's saved tracks (liked songs)
+      const savedTracks = await fetchUserSavedTracks();
+      
+      if (savedTracks && savedTracks.length > 0) {
+        console.log(`✅ Found ${savedTracks.length} liked songs`);
+        
+        // Get user's recently played tracks (up to 50 - Spotify API limit)
+        const recentlyPlayedResponse = await fetch('https://api.spotify.com/v1/me/player/recently-played?limit=50', {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (recentlyPlayedResponse.ok) {
+          const recentlyPlayedData = await recentlyPlayedResponse.json();
+          const recentlyPlayedIds = new Set();
+          
+          // Extract recently played track IDs
+          if (recentlyPlayedData.items && recentlyPlayedData.items.length > 0) {
+            recentlyPlayedData.items.forEach(item => {
+              if (item.track && item.track.id) {
+                recentlyPlayedIds.add(item.track.id);
+              }
+            });
+            console.log(`ℹ️ Found ${recentlyPlayedIds.size} recently played tracks`);
+          }
+          
+          // Filter liked songs that haven't been played recently
+          const notRecentlyPlayedTracks = savedTracks.filter(track => 
+            !recentlyPlayedIds.has(track.id) && !heardTrackIds.has(track.id)
+          );
+          
+          if (notRecentlyPlayedTracks.length > 0) {
+            // Use cryptographically secure randomness for selection
+            const randomIndex = Math.floor(cryptoRandom() * notRecentlyPlayedTracks.length);
+            firstTrack = notRecentlyPlayedTracks[randomIndex];
+            console.log('✅ Selected first track:', firstTrack.name);
+          } else {
+            console.log('⚠️ No liked songs that haven\'t been heard recently, using fallback');
+            // Fallback: random liked song
+            const randomIndex = Math.floor(cryptoRandom() * savedTracks.length);
+            firstTrack = savedTracks[randomIndex];
+          }
+        } else {
+          console.warn('⚠️ Unable to fetch recently played tracks, using random liked song');
+          // Fallback to random liked song
+          const randomIndex = Math.floor(cryptoRandom() * savedTracks.length);
+          firstTrack = savedTracks[randomIndex];
+        }
+      } else {
+        console.warn('⚠️ No liked songs found, will use fallback for first track');
+      }
+    } catch (error) {
+      console.error('❌ Error finding first track:', error);
+    }
+    
+    // Step 2: Build the track pool from various library sources
+    const trackPool = [];
+    
+    // If we have a first track, add it to the beginning of our pool
+    if (firstTrack) {
+      trackPool.push(firstTrack);
+      // Mark as heard to avoid repeats
+      heardTrackIds.add(firstTrack.id);
+    }
+    
+    // Sources to gather tracks from user's library
+    console.log('🔍 Building track pool from user library...');
+    
+    // Add tracks from user's saved library
     const savedTracks = await fetchUserSavedTracks();
-    allTracks.push(...savedTracks);
-    savedTracks.forEach(track => usedTrackIds.add(track.id));
     
-    // Strategy 2: Get tracks from user's playlists
-    console.log('📋 Strategy 2: Fetching from user playlists...');
-    if (allTracks.length < maxResults) {
-      const playlistTracks = await fetchUserPlaylistTracks(usedTrackIds, 20);
-      allTracks.push(...playlistTracks);
-      playlistTracks.forEach(track => usedTrackIds.add(track.id));
+    // Filter out tracks we've already added or heard
+    const newSavedTracks = savedTracks.filter(track => 
+      track.id && !heardTrackIds.has(track.id) && !trackPool.some(t => t.id === track.id)
+    );
+    
+    if (newSavedTracks.length > 0) {
+      console.log(`✅ Adding ${newSavedTracks.length} tracks from your saved songs`);
+      trackPool.push(...cryptographicShuffle(newSavedTracks));
     }
     
-    // Strategy 3: Get tracks from user's top tracks
-    console.log('🔝 Strategy 3: Fetching from user top tracks...');
-    if (allTracks.length < maxResults) {
-      const topTracks = await fetchUserTopTracks(usedTrackIds);
-      allTracks.push(...topTracks);
-      topTracks.forEach(track => usedTrackIds.add(track.id));
+    // Add tracks from user playlists
+    const playlistTracks = await fetchUserPlaylistTracks(heardTrackIds, 50);
+    
+    // Filter out tracks we've already added
+    const newPlaylistTracks = playlistTracks.filter(track => 
+      track.id && !trackPool.some(t => t.id === track.id)
+    );
+    
+    if (newPlaylistTracks.length > 0) {
+      console.log(`✅ Adding ${newPlaylistTracks.length} tracks from your playlists`);
+      trackPool.push(...cryptographicShuffle(newPlaylistTracks));
     }
+    
+    // Add tracks from user's top tracks
+    const topTracks = await fetchUserTopTracks(heardTrackIds);
+    
+    // Filter out tracks we've already added
+    const newTopTracks = topTracks.filter(track => 
+      track.id && !trackPool.some(t => t.id === track.id)
+    );
+    
+    if (newTopTracks.length > 0) {
+      console.log(`✅ Adding ${newTopTracks.length} tracks from your top tracks`);
+      trackPool.push(...cryptographicShuffle(newTopTracks));
+    }
+    
+    // Enable crossfade for smoother transitions
+    enableCrossfade();
     
     // Filter and validate tracks
-    const filteredTracks = filterTracksBySettings(allTracks, customSettings);
+    const filteredTracks = filterTracksBySettings(trackPool, customSettings);
     
-    // Apply Fisher-Yates shuffle for unbiased randomization
-    const trulyRandomTracks = fisherYatesShuffle(filteredTracks);
+    // Apply cryptographic shuffle for true randomness
+    const trulyRandomTracks = cryptographicShuffle(filteredTracks);
     
-    console.log(`✅ Found ${trulyRandomTracks.length} tracks from your library`);
+    console.log(`✅ Ready to play ${trulyRandomTracks.length} tracks from your library`);
     
-    return trulyRandomTracks.slice(0, maxResults);
+    return trulyRandomTracks;
     
   } catch (error) {
     console.error('❌ Error in fetchTrueShuffleMyLibrary:', error);
