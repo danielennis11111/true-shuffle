@@ -1141,7 +1141,7 @@ function getDateRange() {
 }
 
 async function fetchTrulyRandomTracks() {
-    console.log('🎲 Fetching truly random tracks with best practices...');
+    console.log('🎲 Fetching TRULY random tracks using cryptographic randomization...');
     
     // Get current settings
     const userSettings = settingsManager ? settingsManager.getSettings() : await loadUserSettings();
@@ -1160,50 +1160,299 @@ async function fetchTrulyRandomTracks() {
         const usedTrackIds = new Set();
         const maxResults = 50;
         
-        // Best Practice: Use Spotify's recommendation engine with random seeds
-        // This is more effective than search-based randomization
+        // Strategy 1: Pure Random Track ID Generation (Most Random)
+        console.log('🎯 Strategy 1: Pure random track ID generation...');
+        const randomIdTracks = await fetchRandomTracksByIds(userSettings, usedTrackIds, 15);
+        allTracks.push(...randomIdTracks);
+        randomIdTracks.forEach(track => usedTrackIds.add(track.id));
         
-        // Strategy 1: Random track recommendations
-        const randomRecommendations = await fetchRandomRecommendations(userSettings);
-        if (randomRecommendations.length > 0) {
-            allTracks.push(...randomRecommendations.slice(0, 20));
-            randomRecommendations.forEach(track => usedTrackIds.add(track.id));
-        }
-        
-        // Strategy 2: Random search with better distribution
+        // Strategy 2: Ultra-Random Search with Cryptographic Randomization
+        console.log('🔀 Strategy 2: Ultra-random search exploration...');
         if (allTracks.length < maxResults) {
-            const searchResults = await fetchRandomSearchResults(userSettings, usedTrackIds);
-            allTracks.push(...searchResults);
+            const ultraRandomTracks = await fetchUltraRandomSearchTracks(userSettings, usedTrackIds, 20);
+            allTracks.push(...ultraRandomTracks);
         }
         
-        // Strategy 3: Random album exploration
+        // Strategy 3: Random Playlist Deep Dive
+        console.log('📋 Strategy 3: Random playlist exploration...');
         if (allTracks.length < maxResults) {
-            const albumResults = await fetchRandomAlbumTracks(userSettings, usedTrackIds);
-            allTracks.push(...albumResults);
+            const playlistTracks = await fetchRandomPlaylistTracks(userSettings, usedTrackIds, 15);
+            allTracks.push(...playlistTracks);
         }
         
-        // Filter by settings
+        // Filter and validate tracks
         const filteredTracks = filterTracksBySettings(allTracks, userSettings);
         
-        console.log(`✅ Found ${filteredTracks.length} tracks with current settings`);
+        // Apply cryptographic shuffle for maximum randomness
+        const trulyRandomTracks = cryptographicShuffle(filteredTracks);
         
-        // Log a sample of what we found for verification
-        if (filteredTracks.length > 0) {
-            console.log('📋 Sample tracks found:', filteredTracks.slice(0, 3).map(t => ({
-                name: t.name,
-                artist: t.artists[0].name,
-                year: t.album.release_date,
-                popularity: t.popularity,
-                explicit: t.explicit
-            })));
+        console.log(`✅ Found ${trulyRandomTracks.length} TRULY random tracks`);
+        
+        // Log randomness verification
+        if (trulyRandomTracks.length > 0) {
+            const artists = trulyRandomTracks.map(t => t.artists[0].name);
+            const uniqueArtists = new Set(artists);
+            const genres = trulyRandomTracks.map(t => t.genres || ['unknown']).flat();
+            const uniqueGenres = new Set(genres);
+            
+            console.log('🎲 Randomness Verification:', {
+                totalTracks: trulyRandomTracks.length,
+                uniqueArtists: uniqueArtists.size,
+                uniqueGenres: uniqueGenres.size,
+                artistDiversity: (uniqueArtists.size / trulyRandomTracks.length * 100).toFixed(1) + '%',
+                sampleArtists: Array.from(uniqueArtists).slice(0, 5)
+            });
         }
         
-        return filteredTracks.slice(0, maxResults);
+        return trulyRandomTracks.slice(0, maxResults);
         
     } catch (error) {
         console.error('❌ Error in fetchTrulyRandomTracks:', error);
         return [];
     }
+}
+
+// Strategy 1: Generate random Spotify track IDs and check if they exist
+async function fetchRandomTracksByIds(userSettings, usedTrackIds, maxTracks) {
+    console.log('🎯 Generating random Spotify track IDs...');
+    
+    const tracks = [];
+    const base62chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const maxAttempts = 100; // Try up to 100 random IDs
+    
+    for (let i = 0; i < maxAttempts && tracks.length < maxTracks; i++) {
+        try {
+            // Generate a cryptographically random 22-character Spotify track ID
+            let randomId = '';
+            const randomBytes = new Uint8Array(22);
+            crypto.getRandomValues(randomBytes);
+            
+            for (let j = 0; j < 22; j++) {
+                randomId += base62chars[randomBytes[j] % base62chars.length];
+            }
+            
+            // Try to fetch this track
+            const response = await fetch(`https://api.spotify.com/v1/tracks/${randomId}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            
+            if (response.ok) {
+                const track = await response.json();
+                if (!usedTrackIds.has(track.id) && isValidTrack(track, userSettings)) {
+                    tracks.push(track);
+                    usedTrackIds.add(track.id);
+                    console.log(`🎲 Random ID hit! Found: ${track.name} by ${track.artists[0].name}`);
+                }
+            }
+            
+            // Small delay to avoid rate limiting
+            if (i % 10 === 0) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            
+        } catch (error) {
+            // Silent fail for random ID attempts
+        }
+    }
+    
+    console.log(`🎯 Random ID strategy found ${tracks.length} tracks`);
+    return tracks;
+}
+
+// Strategy 2: Ultra-random search with maximum entropy
+async function fetchUltraRandomSearchTracks(userSettings, usedTrackIds, maxTracks) {
+    console.log('🔀 Ultra-random search exploration...');
+    
+    const tracks = [];
+    
+    // Generate completely random search terms using various strategies
+    const randomSearchStrategies = [
+        // Random Unicode characters for international diversity
+        () => {
+            const unicodeRanges = [
+                [0x0041, 0x005A], // A-Z
+                [0x0061, 0x007A], // a-z
+                [0x00C0, 0x00FF], // Latin Extended
+                [0x0100, 0x017F], // Latin Extended-A
+                [0x1E00, 0x1EFF], // Latin Extended Additional
+            ];
+            const range = unicodeRanges[Math.floor(cryptoRandom() * unicodeRanges.length)];
+            const char = String.fromCharCode(range[0] + Math.floor(cryptoRandom() * (range[1] - range[0])));
+            return char;
+        },
+        
+        // Random 2-3 character combinations
+        () => {
+            const chars = 'abcdefghijklmnopqrstuvwxyz';
+            let term = '';
+            const length = 2 + Math.floor(cryptoRandom() * 2); // 2-3 chars
+            for (let i = 0; i < length; i++) {
+                term += chars[Math.floor(cryptoRandom() * chars.length)];
+            }
+            return term;
+        },
+        
+        // Random numbers and years
+        () => Math.floor(cryptoRandom() * 9999).toString(),
+        
+        // Random common words with entropy
+        () => {
+            const words = ['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'had', 'has', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'];
+            return words[Math.floor(cryptoRandom() * words.length)];
+        }
+    ];
+    
+    for (let attempt = 0; attempt < 10 && tracks.length < maxTracks; attempt++) {
+        try {
+            // Generate random search term
+            const strategy = randomSearchStrategies[Math.floor(cryptoRandom() * randomSearchStrategies.length)];
+            const searchTerm = strategy();
+            
+            // Use massive random offset for maximum entropy
+            const randomOffset = Math.floor(cryptoRandom() * 2000); // 0-2000 random offset
+            
+            // Apply user settings to search if available
+            let searchQuery = `"${searchTerm}"`;
+            
+            // Language filtering
+            if (userSettings.languages && userSettings.languages.length > 0) {
+                const markets = {
+                    'en': ['US', 'GB', 'CA', 'AU', 'NZ'],
+                    'es': ['ES', 'MX', 'AR', 'CO', 'CL'],
+                    'fr': ['FR', 'CA', 'BE', 'CH'],
+                    'de': ['DE', 'AT', 'CH'],
+                    'it': ['IT', 'CH'],
+                    'pt': ['BR', 'PT'],
+                    'ru': ['RU'],
+                    'ja': ['JP'],
+                    'ko': ['KR']
+                };
+                
+                const userLang = userSettings.languages[Math.floor(cryptoRandom() * userSettings.languages.length)];
+                if (markets[userLang]) {
+                    const marketList = markets[userLang];
+                    const market = marketList[Math.floor(cryptoRandom() * marketList.length)];
+                    searchQuery += ` market:${market}`;
+                }
+            }
+            
+            console.log(`🔍 Ultra-random search: "${searchQuery}" (offset: ${randomOffset})`);
+            
+            const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=track&limit=50&offset=${randomOffset}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const validTracks = data.tracks.items
+                    .filter(track => !usedTrackIds.has(track.id) && isValidTrack(track, userSettings));
+                
+                // Use cryptographic shuffle and take random subset
+                const shuffledTracks = cryptographicShuffle(validTracks);
+                const randomCount = Math.min(3, shuffledTracks.length);
+                const selectedTracks = shuffledTracks.slice(0, randomCount);
+                
+                tracks.push(...selectedTracks);
+                selectedTracks.forEach(track => usedTrackIds.add(track.id));
+            }
+            
+            // Random delay to avoid patterns
+            await new Promise(resolve => setTimeout(resolve, 50 + Math.floor(cryptoRandom() * 100)));
+            
+        } catch (error) {
+            console.error('❌ Ultra-random search error:', error);
+        }
+    }
+    
+    console.log(`🔀 Ultra-random search found ${tracks.length} tracks`);
+    return tracks;
+}
+
+// Strategy 3: Random playlist exploration for deep catalog access
+async function fetchRandomPlaylistTracks(userSettings, usedTrackIds, maxTracks) {
+    console.log('📋 Random playlist exploration...');
+    
+    const tracks = [];
+    const playlistCategories = ['toplists', 'pop', 'mood', 'party', 'workout', 'chill', 'focus', 'rock', 'hiphop', 'electronic', 'jazz', 'classical', 'country', 'indie'];
+    
+    try {
+        // Get random playlists from random categories
+        for (let i = 0; i < 3 && tracks.length < maxTracks; i++) {
+            const randomCategory = playlistCategories[Math.floor(cryptoRandom() * playlistCategories.length)];
+            const randomOffset = Math.floor(cryptoRandom() * 500);
+            
+            try {
+                // Get playlists from category
+                const playlistResponse = await fetch(`https://api.spotify.com/v1/browse/categories/${randomCategory}/playlists?limit=20&offset=${randomOffset}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (playlistResponse.ok) {
+                    const playlistData = await playlistResponse.json();
+                    if (playlistData.playlists && playlistData.playlists.items.length > 0) {
+                        // Pick random playlist
+                        const randomPlaylist = playlistData.playlists.items[Math.floor(cryptoRandom() * playlistData.playlists.items.length)];
+                        
+                        // Get random tracks from this playlist
+                        const trackOffset = Math.floor(cryptoRandom() * 100);
+                        const trackResponse = await fetch(`https://api.spotify.com/v1/playlists/${randomPlaylist.id}/tracks?limit=50&offset=${trackOffset}`, {
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        });
+                        
+                        if (trackResponse.ok) {
+                            const trackData = await trackResponse.json();
+                            const playlistTracks = trackData.items
+                                .map(item => item.track)
+                                .filter(track => track && !usedTrackIds.has(track.id) && isValidTrack(track, userSettings));
+                            
+                            // Random selection from playlist
+                            const shuffledPlaylistTracks = cryptographicShuffle(playlistTracks);
+                            const selectedCount = Math.min(5, shuffledPlaylistTracks.length);
+                            const selectedTracks = shuffledPlaylistTracks.slice(0, selectedCount);
+                            
+                            tracks.push(...selectedTracks);
+                            selectedTracks.forEach(track => usedTrackIds.add(track.id));
+                            
+                            console.log(`📋 Found ${selectedTracks.length} tracks from random playlist: ${randomPlaylist.name}`);
+                        }
+                    }
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+            } catch (error) {
+                console.error('❌ Playlist exploration error:', error);
+            }
+        }
+        
+    } catch (error) {
+        console.error('❌ Error in playlist exploration:', error);
+    }
+    
+    console.log(`📋 Playlist exploration found ${tracks.length} tracks`);
+    return tracks;
+}
+
+// Cryptographically secure random number generator
+function cryptoRandom() {
+    const array = new Uint32Array(1);
+    crypto.getRandomValues(array);
+    return array[0] / 4294967296; // Convert to 0-1 range
+}
+
+// Cryptographic Fisher-Yates shuffle for maximum randomness
+function cryptographicShuffle(array) {
+    if (!array || array.length <= 1) return array;
+    
+    const shuffled = [...array];
+    
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        // Use cryptographically secure random number
+        const j = Math.floor(cryptoRandom() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    
+    return shuffled;
 }
 
 // Best Practice: Use Spotify's recommendation engine for true randomness
@@ -1492,37 +1741,8 @@ function getRandomItems(array, count) {
 
 // Try fetching tracks by generating random Spotify track IDs
 async function fetchRandomTrackIds(existingTracks) {
-  console.log('🎲 Generating random Spotify track IDs...');
-  
-  // Spotify track IDs are base62 encoded, typically 22 characters
-  const base62chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  
-  for (let i = 0; i < 10; i++) {
-    try {
-      // Generate a random 22-character ID
-      let randomId = '';
-      for (let j = 0; j < 22; j++) {
-        randomId += base62chars[Math.floor(Math.random() * base62chars.length)];
-      }
-      
-      // Try to fetch this track
-      const response = await fetch(`https://api.spotify.com/v1/tracks/${randomId}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
-      
-      if (response.ok) {
-        const track = await response.json();
-        console.log(`🎲 Random ID hit! Found: ${track.name} by ${track.artists[0].name}`);
-        existingTracks.push(track);
-      } else {
-        console.log(`🎲 Random ID ${randomId} doesn't exist (${response.status})`);
-      }
-    } catch (error) {
-      console.log('🎲 Random ID attempt failed:', error);
-    }
-  }
+  console.log('🎲 Legacy random ID function - use fetchRandomTracksByIds instead');
+  return [];
 }
 
 // Fetch tracks deliberately mixing different genres
