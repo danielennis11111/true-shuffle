@@ -29,9 +29,9 @@
                 <div class="app-branding">
                     <div class="logo">
                         <i class="fas fa-random logo-icon"></i>
-                        <h1 class="app-name">True Shuffle</h1>
+                        <h1 class="app-name text-white">True Shuffle Radio</h1>
                     </div>
-                    <span class="app-version">2.1</span>
+                    
                 </div>
             </div>
 
@@ -75,29 +75,45 @@
         <section id="player-section" class="player-section hidden">
             <div class="player-container">
                 
-                <!-- Vinyl Record Player -->
-                <div class="vinyl-player">
-                    <div id="vinyl-record" class="vinyl-record">
-                        <div class="record-disc">
-                            <!-- Album Cover -->
-                            <div class="album-cover">
-                                <img id="album-image" src="" alt="Album Cover">
+                <!-- Player Visual Section with Static Album Art and Vinyl -->
+                <div class="player-visual-section">
+                    <!-- Static Album Art -->
+                    <div class="static-album-art">
+                        <img id="static-album-image" src="" alt="Album Cover">
+                    </div>
+                    
+                    <!-- Vinyl Record Player -->
+                    <div class="vinyl-player">
+                        <div id="vinyl-record" class="vinyl-record">
+                            <div class="record-disc">
+                                <!-- Album Cover -->
+                                <div class="album-cover">
+                                    <img id="album-image" src="" alt="Album Cover">
+                                </div>
+                                <!-- Center Label -->
+                                <div class="center-label">
+                                    <div class="label-text">TSR</div>
+                                </div>
                             </div>
-                            <!-- Center Label -->
-                            <div class="center-label">
-                                <div class="label-text">TSR</div>
+                            <!-- Static Album Art Overlay -->
+                            <div class="album-art-overlay">
+                                <img id="album-art-static" src="" alt="Album Cover">
                             </div>
-                        </div>
-                        <!-- Static Album Art Overlay -->
-                        <div class="album-art-overlay">
-                            <img id="album-art-static" src="" alt="Album Cover">
                         </div>
                     </div>
                 </div>
 
                 <!-- Track Info -->
                 <div class="track-info">
-                    <h3 id="track-name">Track Name</h3>
+                    <div class="row">
+                        <h3 id="track-name">Track Name</h3><!-- Action Buttons -->
+                    <div class="action-buttons">
+                        <button id="like-button" class="action-btn">
+                            <i class="far fa-heart"></i>
+                        </button>
+                        
+                    </div>
+                </div>
                     <p id="artist-name">Artist Name</p>
                     <p id="album-name">Album Name</p>
                 </div>
@@ -124,13 +140,7 @@
                     <span id="total-time">0:00</span>
                 </div>
 
-                <!-- Action Buttons -->
-                <div class="action-buttons">
-                    <button id="like-button" class="action-btn">
-                        <i class="far fa-heart"></i>
-                    </button>
-                    
-                </div>
+                
 
             </div>
         </section>

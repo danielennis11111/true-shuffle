@@ -105,9 +105,9 @@ body {
 }
 
 .sidebar-header .app-name {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     margin: 0;
-    background: linear-gradient(135deg, #1db954 0%, #1ed760 100%);
+    background: white;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -241,9 +241,51 @@ body {
         transform: translateX(0);
     }
     
-    .main-content.with-sidebar {
-        margin-left: 0;
-        padding: 20px;
+    .main-content {
+        padding: 1rem;
+    }
+    
+    .config-container h2 {
+        font-size: 1.8rem;
+    }
+    
+    /* Mobile layout for player visual section */
+    .player-visual-section {
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    
+    .static-album-art {
+        width: 200px;
+        height: 200px;
+    }
+    
+    .record-disc {
+        width: 200px;
+        height: 200px;
+    }
+    
+    .album-cover {
+        width: 160px;
+        height: 160px;
+    }
+    
+    .player-controls {
+        gap: 1rem;
+    }
+    
+    .control-btn {
+        width: 50px;
+        height: 50px;
+    }
+    
+    .play-btn {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .mood-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
 }
 
@@ -558,19 +600,54 @@ body {
 }
 
 .player-container {
-    text-align: center;
-    max-width: 500px;
+    max-width: 1200px;
     width: 100%;
-    padding: 40px;
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(15px);
-    border-radius: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 2rem;
+    text-align: center;
+    background: transparent;
+    backdrop-filter: blur(20px);
+    border-radius: 20px;
+    margin: 0 auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
+
+/* Player visual section containing static album art and vinyl */
+.player-visual-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3rem;
+    margin-bottom: 2rem;
+}
+
+.static-album-art {
+    width: 320px;
+    height: 320px;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+    transition: transform 0.3s ease;
+    margin-right: -219px;
+    z-index: 100000;
+    margin-top: 0px;
+}
+
+.static-album-art:hover {
+    transform: scale(1.02);
+}
+
+.static-album-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 15px;
+}
+
+
 
 /* Vinyl Player */
 .vinyl-player {
-    margin-bottom: 3rem;
+    margin-bottom: 0;
     position: relative;
 }
 
@@ -647,10 +724,19 @@ body {
     margin-bottom: 2rem;
 }
 
+/* Row layout for track name and action buttons */
+.row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
 .track-info h3 {
     font-size: 2rem;
     font-weight: 600;
-    margin-bottom: 0.5rem;
+    margin: 0; /* Remove margin since row handles spacing */
     color: #333;
 }
 
@@ -735,20 +821,25 @@ body {
 /* Action Buttons */
 .action-buttons {
     display: flex;
-    justify-content: center;
-    gap: 1rem;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0; /* Don't shrink smaller than content */
 }
 
 .action-btn {
     background: white;
     border: 2px solid #e0e0e0;
-    border-radius: 25px;
-    padding: 0.75rem 1.5rem;
+    border-radius: 50%; /* Make it circular for a cleaner look */
+    padding: 0.5rem;
     cursor: pointer;
     transition: all 0.2s ease;
-    font-size: 0.9rem;
+    font-size: 1rem;
     color: #333;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .action-btn:hover {
@@ -815,30 +906,42 @@ body {
 
 @media (max-width: 480px) {
     .header {
-        padding: 1rem;
-    }
-    
-    .record-disc {
-        width: 200px;
-        height: 200px;
-    }
-    
-    .album-cover {
-        width: 80px;
-        height: 80px;
-    }
-    
-    .track-info h3 {
-        font-size: 1.5rem;
-    }
-    
-    .action-buttons {
         flex-direction: column;
-        align-items: center;
+        gap: 1rem;
     }
-    
+
+    /* Extra small screens adjustments */
+    .player-visual-section {
+        gap: 1rem;
+    }
+
+    .static-album-art {
+        width: 150px;
+        height: 150px;
+    }
+
+    .record-disc {
+        width: 150px;
+        height: 150px;
+    }
+
+    .album-cover {
+        width: 120px;
+        height: 120px;
+    }
+
+    .track-info h3 {
+        font-size: 1.2rem;
+    }
+
+    .action-buttons {
+        justify-content: center;
+    }
+
     .action-btn {
-        min-width: 200px;
+        width: 35px;
+        height: 35px;
+        font-size: 0.9rem;
     }
 }
 

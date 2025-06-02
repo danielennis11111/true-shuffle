@@ -2631,6 +2631,13 @@ function updateNowPlaying(track) {
         albumImageElement.src = imageUrl;
         albumImageElement.alt = `${track.album.name} album cover`;
         
+        // Also update the static album art
+        const staticAlbumImageElement = document.getElementById('static-album-image');
+        if (staticAlbumImageElement) {
+            staticAlbumImageElement.src = imageUrl;
+            staticAlbumImageElement.alt = `${track.album.name} album cover`;
+        }
+        
         // Update background color based on album art
         updateBackgroundColor(albumImageElement);
         
