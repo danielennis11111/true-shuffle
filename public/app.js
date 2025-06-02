@@ -38,6 +38,11 @@ let algorithmV2HeardTrackIds = new Set();
 let algorithmV2ArtistPlayCount = new Map();
 let algorithmV2RecentArtists = [];
 
+// Global variables for tracking heard songs
+let trackedSongs = new Set(); // To prevent duplicates
+let currentTrackTimer = null; // Timer for 10-second threshold
+let currentTrackStartTime = null; // When the current track started
+
 // Mood configurations for audio features
 const moodConfigs = {
   happy: {
@@ -2236,6 +2241,9 @@ function togglePlayPause() {
 function playPreviousTrack() {
   console.log('⏮️ Playing previous track...');
   
+  // Stop tracking the current track (since user is changing tracks)
+  stopTrackingForHeardPlaylist();
+  
   if (shuffledTracks.length === 0) {
     console.log('📭 No tracks in queue');
     return;
@@ -2261,10 +2269,8 @@ function playPreviousTrack() {
 function playNextTrack() {
   console.log('⏭️ Playing next track...');
   
-  // Add current track to heard playlist if we're moving away from it
-  if (currentTrack && currentTrack.id) {
-    addTrackToHeardPlaylist(currentTrack.id);
-  }
+  // Stop tracking the current track (since user is skipping)
+  stopTrackingForHeardPlaylist();
   
   // Check if we're using algorithm v2
   if (algorithmV2TrackPool.length > 0) {
@@ -2354,8 +2360,8 @@ async function playCurrentTrack() {
   try {
     // Play the track
     await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-                method: 'PUT',
-                headers: {
+      method: 'PUT',
+      headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
@@ -2367,8 +2373,8 @@ async function playCurrentTrack() {
     // Update now playing
     updateNowPlaying(currentTrack);
     
-    // Add to heard playlist
-    addTrackToHeardPlaylist(currentTrack.id);
+    // Start tracking for heard playlist (10-second delay)
+    startTrackingForHeardPlaylist(currentTrack.id);
     
     // Check if the track is liked
     checkIfTrackIsLiked(currentTrack.id);
@@ -2382,22 +2388,83 @@ async function playCurrentTrack() {
 
 // Add track to Heard on True Shuffle playlist
 async function addTrackToHeardPlaylist(trackId) {
-  if (!playlistCache.heardOnTrueShuffle) return;
+  if (!playlistCache.heardOnTrueShuffle || !trackId) return;
+  
+  // Check if we've already added this track
+  if (trackedSongs.has(trackId)) {
+    console.log('🎵 Track already in heard playlist, skipping:', trackId);
+    return;
+  }
   
   try {
-    await fetch(`https://api.spotify.com/v1/playlists/${playlistCache.heardOnTrueShuffle.id}/tracks`, {
+    // First check if the track is already in the playlist to avoid Spotify duplicates
+    const checkResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlistCache.heardOnTrueShuffle.id}/tracks?limit=50`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    
+    if (checkResponse.ok) {
+      const playlistData = await checkResponse.json();
+      const trackExists = playlistData.items.some(item => item.track && item.track.id === trackId);
+      
+      if (trackExists) {
+        console.log('🎵 Track already exists in Spotify playlist, skipping:', trackId);
+        trackedSongs.add(trackId); // Mark as tracked locally
+        return;
+      }
+    }
+    
+    // Add the track to the playlist
+    const addResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlistCache.heardOnTrueShuffle.id}/tracks`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
         uris: [`spotify:track:${trackId}`],
         position: 0
       })
     });
+    
+    if (addResponse.ok) {
+      trackedSongs.add(trackId); // Mark as successfully added
+      console.log('✅ Track added to heard playlist:', trackId);
+    } else {
+      console.error('❌ Failed to add track to playlist:', addResponse.status);
+    }
   } catch (error) {
-    console.error('Error adding track to heard playlist:', error);
+    console.error('❌ Error adding track to heard playlist:', error);
+  }
+}
+
+// Function to start tracking a track for the heard playlist (with 10-second delay)
+function startTrackingForHeardPlaylist(trackId) {
+  if (!trackId) return;
+  
+  // Clear any existing timer
+  if (currentTrackTimer) {
+    clearTimeout(currentTrackTimer);
+    currentTrackTimer = null;
+  }
+  
+  currentTrackStartTime = Date.now();
+  console.log('🎵 Starting 10-second timer for track:', trackId);
+  
+  // Set a 10-second timer before adding to heard playlist
+  currentTrackTimer = setTimeout(() => {
+    console.log('✅ 10 seconds elapsed, adding track to heard playlist:', trackId);
+    addTrackToHeardPlaylist(trackId);
+    currentTrackTimer = null;
+  }, 10000); // 10 seconds
+}
+
+// Function to stop tracking (when user skips before 10 seconds)
+function stopTrackingForHeardPlaylist() {
+  if (currentTrackTimer) {
+    const elapsed = Date.now() - currentTrackStartTime;
+    console.log(`🎵 Stopping track timer (played for ${elapsed}ms, needed 10000ms)`);
+    clearTimeout(currentTrackTimer);
+    currentTrackTimer = null;
   }
 }
 
@@ -2805,7 +2872,31 @@ function extractColorsFromURL(imageUrl) {
   processExtractedColors(palette);
 }
 
-// Process extracted colors and start animation
+// Function to calculate color vibrancy (saturation * lightness, adjusted for brightness)
+function calculateColorVibrancy([r, g, b]) {
+  // Convert to HSL
+  const [h, s, l] = rgbToHsl(r, g, b);
+  
+  // Calculate vibrancy score
+  // Prioritize colors with high saturation and good lightness balance
+  const saturationScore = s * s; // Square to emphasize high saturation
+  const lightnessScore = l < 0.5 ? l * 2 : (1 - l) * 2; // Prefer mid-tones
+  const brightnessBonus = (r + g + b) / (3 * 255); // Slight bonus for brighter colors
+  
+  return saturationScore * lightnessScore * (1 + brightnessBonus * 0.3);
+}
+
+// Function to ensure color diversity (avoid similar colors)
+function areColorsDistinct([r1, g1, b1], [r2, g2, b2], threshold = 50) {
+  const distance = Math.sqrt(
+    Math.pow(r1 - r2, 2) + 
+    Math.pow(g1 - g2, 2) + 
+    Math.pow(b1 - b2, 2)
+  );
+  return distance >= threshold;
+}
+
+// Process extracted colors and select the most vibrant ones
 function processExtractedColors(palette) {
   console.log('🎨 ===== PROCESSING EXTRACTED COLORS =====');
   console.log('🎨 Input palette:', palette);
@@ -2816,17 +2907,66 @@ function processExtractedColors(palette) {
     return;
   }
   
-  // Extract and enhance colors
-  const primaryColor = palette[0];
-  const secondaryColor = palette[1] || adjustColor(primaryColor, 0.7, 1.3);
-  const accentColor = palette[2] || adjustColor(primaryColor, 1.3, 0.7);
+  // Calculate vibrancy scores for all colors
+  const colorScores = palette.map(color => ({
+    color: color,
+    vibrancy: calculateColorVibrancy(color),
+    brightness: (color[0] + color[1] + color[2]) / 3
+  }));
   
-  console.log('🎨 Raw colors:', { primaryColor, secondaryColor, accentColor });
+  console.log('🎨 Color vibrancy scores:', colorScores.map(cs => ({
+    color: `rgb(${cs.color.join(', ')})`,
+    vibrancy: cs.vibrancy.toFixed(3),
+    brightness: cs.brightness.toFixed(1)
+  })));
+  
+  // Sort by vibrancy score (highest first)
+  colorScores.sort((a, b) => b.vibrancy - a.vibrancy);
+  
+  // Select the most vibrant primary color
+  const primaryColor = colorScores[0].color;
+  
+  // Find a good secondary color that's distinct from primary
+  let secondaryColor = null;
+  for (let i = 1; i < colorScores.length; i++) {
+    const candidate = colorScores[i].color;
+    if (areColorsDistinct(primaryColor, candidate, 60)) {
+      secondaryColor = candidate;
+      break;
+    }
+  }
+  
+  // If no distinct secondary found, create one by adjusting the primary
+  if (!secondaryColor) {
+    secondaryColor = adjustColor(primaryColor, 0.7, 1.4);
+  }
+  
+  // Create an accent color that complements both
+  let accentColor = null;
+  for (let i = 1; i < colorScores.length; i++) {
+    const candidate = colorScores[i].color;
+    if (areColorsDistinct(primaryColor, candidate, 80) && 
+        areColorsDistinct(secondaryColor, candidate, 60)) {
+      accentColor = candidate;
+      break;
+    }
+  }
+  
+  // If no distinct accent found, create one
+  if (!accentColor) {
+    accentColor = adjustColor(primaryColor, 1.3, 0.8);
+  }
+  
+  console.log('🎨 Selected vibrant colors:', {
+    primary: `rgb(${primaryColor.join(', ')})`,
+    secondary: `rgb(${secondaryColor.join(', ')})`,
+    accent: `rgb(${accentColor.join(', ')})`
+  });
   
   // Enhance the colors for better visual impact
-  const enhancedPrimary = enhanceColor(primaryColor);
-  const enhancedSecondary = enhanceColor(secondaryColor);
-  const enhancedAccent = enhanceColor(accentColor);
+  const enhancedPrimary = enhanceColor(primaryColor, 1.2);
+  const enhancedSecondary = enhanceColor(secondaryColor, 1.1);
+  const enhancedAccent = enhanceColor(accentColor, 1.15);
   
   // Store colors for animation
   currentColors = {
@@ -2835,7 +2975,7 @@ function processExtractedColors(palette) {
     accent: enhancedAccent
   };
   
-  console.log('🎨 ✅ FINAL COLORS FOR ANIMATION:', {
+  console.log('🎨 ✅ FINAL ENHANCED COLORS FOR ANIMATION:', {
     primary: `rgb(${enhancedPrimary.join(', ')})`,
     secondary: `rgb(${enhancedSecondary.join(', ')})`,
     accent: `rgb(${enhancedAccent.join(', ')})`
