@@ -850,6 +850,8 @@ async function fetchRecommendations() {
     // Use the new algorithm for both modes
     if (currentShuffleType === 'true-shuffle-library' || currentShuffleType === 'true-shuffle-all') {
       console.log('🎯 Using Advanced True Shuffle Algorithm v2...');
+      console.log('📊 DEBUG: Current shuffle type:', currentShuffleType);
+      console.log('📊 DEBUG: Access token exists:', !!accessToken);
       
       // Reset algorithm state
       algorithmV2TrackPool = [];
@@ -858,25 +860,32 @@ async function fetchRecommendations() {
       algorithmV2RecentArtists = [];
       
       // Get the track pool from the advanced algorithm
+      console.log('📊 DEBUG: Calling advancedTrueShuffleAlgorithm...');
       algorithmV2TrackPool = await advancedTrueShuffleAlgorithm();
+      console.log('📊 DEBUG: Algorithm returned track pool with', algorithmV2TrackPool.length, 'tracks');
       
       if (algorithmV2TrackPool && algorithmV2TrackPool.length > 0) {
         // Start with just the first track
         tracks = [algorithmV2TrackPool[0]];
-        console.log(`✅ Algorithm v2 initialized with first track: ${tracks[0].name}`);
+        console.log(`✅ Algorithm v2 initialized with first track: ${tracks[0].name} by ${tracks[0].artists[0]?.name}`);
+        console.log('📊 DEBUG: Track source confirmed - using algorithm v2');
       } else {
         console.warn('⚠️ Algorithm v2 failed, falling back to regular shuffle...');
+        console.log('📊 DEBUG: Fallback triggered - algorithm v2 returned empty pool');
         // Fallback to regular algorithms
         switch(currentShuffleType) {
           case 'true-shuffle-all':
+            console.log('📊 DEBUG: Fallback to fetchTrueShuffleAllSpotify');
             tracks = await fetchTrueShuffleAllSpotify();
             break;
           case 'true-shuffle-library':
+            console.log('📊 DEBUG: Fallback to fetchTrueShuffleMyLibrary');
             tracks = await fetchTrueShuffleMyLibrary();
             break;
         }
       }
     } else {
+      console.log('📊 DEBUG: Not using algorithm v2, shuffle type:', currentShuffleType);
       // Use regular shuffle algorithms for other modes
       switch(currentShuffleType) {
         case 'true-shuffle-all':
@@ -894,6 +903,7 @@ async function fetchRecommendations() {
     // Assign tracks to shuffledTracks
     if (tracks && tracks.length > 0) {
       console.log(`✅ Loaded ${tracks.length} tracks for ${getShuffleDisplayName(currentShuffleType)}`);
+      console.log('📊 DEBUG: Sample track:', tracks[0]?.name, 'by', tracks[0]?.artists[0]?.name);
       
       // For algorithm v2, don't shuffle - use as-is
       if (algorithmV2TrackPool.length > 0) {
@@ -5844,50 +5854,126 @@ async function fetchTrueShuffleMyLibrary() {
   }
 }
 
-// Fetch user's saved tracks
+// Fetch user's saved tracks with proper error handling and API structure
 async function fetchUserSavedTracks() {
   console.log('💿 Fetching user saved tracks...');
+  console.log('📊 DEBUG: Access token for saved tracks:', !!accessToken);
+  
+  if (!accessToken) {
+    console.error('❌ No access token available for fetching saved tracks');
+    return [];
+  }
   
   try {
-    // Get a random offset to avoid always getting the same tracks
-    const maxOffset = 500; // Assume user might have up to 500 saved tracks
-    const randomOffset = Math.floor(Math.random() * maxOffset);
-    const limit = 50;
+    const allTracks = [];
+    let totalFetched = 0;
+    const maxTracks = 200; // Fetch up to 200 saved tracks total
     
-    const response = await fetch(`https://api.spotify.com/v1/me/tracks?limit=${limit}&offset=${randomOffset}`, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-    
-    if (response.ok) {
+    // Fetch multiple pages of saved tracks
+    for (let offset = 0; offset < maxTracks; offset += 50) {
+      console.log(`📊 DEBUG: Fetching saved tracks batch - offset: ${offset}, limit: 50`);
+      
+      const response = await fetch(`https://api.spotify.com/v1/me/tracks?limit=50&offset=${offset}`, {
+        headers: { 
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('📊 DEBUG: Saved tracks API response status:', response.status);
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.error('❌ Unauthorized - token may be expired');
+          return [];
+        } else if (response.status === 403) {
+          console.error('❌ Forbidden - insufficient permissions for user-library-read');
+          return [];
+        } else {
+          console.warn(`⚠️ Failed to fetch saved tracks: ${response.status} - ${response.statusText}`);
+          
+          // Try to read error response
+          try {
+            const errorText = await response.text();
+            console.log('📊 DEBUG: Error response:', errorText);
+          } catch (e) {
+            console.log('📊 DEBUG: Could not read error response');
+          }
+          
+          // If we already have some tracks, return them; otherwise return empty
+          return allTracks;
+        }
+      }
+      
       const data = await response.json();
+      console.log('📊 DEBUG: Saved tracks API data structure:', {
+        totalItems: data.total,
+        currentBatch: data.items?.length,
+        hasNext: !!data.next
+      });
       
-      // Extract the track objects from the items (saved tracks are wrapped)
-      const tracks = data.items.map(item => item.track).filter(track => track != null);
+      if (!data.items || data.items.length === 0) {
+        console.log('📊 DEBUG: No more saved tracks to fetch');
+        break;
+      }
       
-      console.log(`✅ Fetched ${tracks.length} saved tracks`);
-      return tracks;
-    } else {
-      console.warn(`⚠️ Failed to fetch saved tracks: ${response.status}`);
-      return [];
+      // Extract track objects from the saved track items
+      const batchTracks = data.items
+        .map(item => item.track)
+        .filter(track => track && track.id && track.name && track.artists);
+      
+      console.log(`📊 DEBUG: Extracted ${batchTracks.length} valid tracks from batch`);
+      allTracks.push(...batchTracks);
+      totalFetched += batchTracks.length;
+      
+      // If this batch had fewer than 50 items, we've reached the end
+      if (data.items.length < 50) {
+        console.log('📊 DEBUG: Reached end of saved tracks (batch < 50)');
+        break;
+      }
+      
+      // Small delay to be nice to the API
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
+    
+    console.log(`✅ Successfully fetched ${allTracks.length} saved tracks from user's library`);
+    
+    if (allTracks.length > 0) {
+      console.log('📊 DEBUG: Sample saved tracks:', 
+        allTracks.slice(0, 3).map(t => `"${t.name}" by ${t.artists[0]?.name} (${t.album?.release_date || 'unknown year'})`));
+    } else {
+      console.log('📊 DEBUG: User has no saved tracks in their library');
+    }
+    
+    return allTracks;
+    
   } catch (error) {
     console.error('❌ Error fetching saved tracks:', error);
+    console.log('📊 DEBUG: Full error details:', error.message, error.stack);
     return [];
   }
 }
 
-// Fetch tracks from user's playlists
+// Fetch tracks from user's playlists with better error handling
 async function fetchUserPlaylistTracks(usedTrackIds, maxTracks) {
   console.log('📋 Fetching tracks from user playlists...');
+  
+  if (!accessToken) {
+    console.error('❌ No access token available for fetching playlists');
+    return [];
+  }
   
   try {
     // First get user's playlists
     const playlistsResponse = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
+      headers: { 
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
     });
     
     if (!playlistsResponse.ok) {
-      console.warn(`⚠️ Failed to fetch playlists: ${playlistsResponse.status}`);
+      console.warn(`⚠️ Failed to fetch playlists: ${playlistsResponse.status} - ${playlistsResponse.statusText}`);
       return [];
     }
     
@@ -5899,40 +5985,76 @@ async function fetchUserPlaylistTracks(usedTrackIds, maxTracks) {
       return [];
     }
     
-    // Randomly select up to 3 playlists
-    const selectedPlaylists = getRandomItems(playlists, Math.min(3, playlists.length));
+    console.log(`📋 Found ${playlists.length} user playlists`);
+    
+    // Filter out playlists that are likely to be auto-generated or system playlists
+    const userPlaylists = playlists.filter(playlist => 
+      playlist.owner.id !== 'spotify' && // Not Spotify-created
+      playlist.tracks.total > 0 && // Has tracks
+      playlist.name && // Has a name
+      !playlist.name.toLowerCase().includes('discover weekly') &&
+      !playlist.name.toLowerCase().includes('release radar')
+    );
+    
+    console.log(`📋 Filtered to ${userPlaylists.length} user-created playlists`);
+    
+    // Randomly select up to 5 playlists for variety
+    const selectedPlaylists = getRandomItems(userPlaylists, Math.min(5, userPlaylists.length));
     
     // Fetch tracks from each selected playlist
     const allTracks = [];
     
     for (const playlist of selectedPlaylists) {
       try {
-        // Get a random offset to avoid always getting the same tracks
-        const randomOffset = Math.floor(Math.random() * Math.min(100, playlist.tracks.total));
+        console.log(`📋 Fetching tracks from playlist: "${playlist.name}" (${playlist.tracks.total} tracks)`);
         
-        const tracksResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=20&offset=${randomOffset}`, {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
+        // Get a random offset to get different tracks each time
+        const maxOffset = Math.max(0, playlist.tracks.total - 50);
+        const randomOffset = Math.floor(Math.random() * (maxOffset + 1));
+        
+        const tracksResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50&offset=${randomOffset}`, {
+          headers: { 
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
         });
         
         if (tracksResponse.ok) {
           const tracksData = await tracksResponse.json();
           
-          // Extract tracks, filter out nulls and duplicates
+          // Extract tracks, filter out nulls, duplicates, and already used tracks
           const tracks = tracksData.items
             .map(item => item.track)
-            .filter(track => track != null && !usedTrackIds.has(track.id));
+            .filter(track => 
+              track && 
+              track.id && 
+              track.name && 
+              track.artists && 
+              !usedTrackIds.has(track.id) &&
+              !allTracks.some(t => t.id === track.id)
+            );
             
-          console.log(`✅ Fetched ${tracks.length} tracks from playlist "${playlist.name}"`);
+          console.log(`✅ Added ${tracks.length} tracks from playlist "${playlist.name}"`);
           allTracks.push(...tracks);
           
-          // If we have enough tracks, stop
-          if (allTracks.length >= maxTracks) break;
+          // If we have enough tracks, stop fetching more
+          if (allTracks.length >= maxTracks) {
+            console.log(`📋 Reached target of ${maxTracks} playlist tracks`);
+            break;
+          }
+        } else {
+          console.warn(`⚠️ Failed to fetch tracks from playlist ${playlist.id}: ${tracksResponse.status}`);
         }
+        
+        // Small delay to be nice to the API
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
       } catch (error) {
-        console.error(`❌ Error fetching tracks from playlist ${playlist.id}:`, error);
+        console.error(`❌ Error fetching tracks from playlist "${playlist.name}":`, error.message);
       }
     }
     
+    console.log(`✅ Total playlist tracks fetched: ${allTracks.length}`);
     return allTracks.slice(0, maxTracks);
     
   } catch (error) {
@@ -6003,7 +6125,7 @@ async function advancedTrueShuffleAlgorithm() {
     algorithmV2ArtistPlayCount.clear();
     algorithmV2RecentArtists.length = 0;
     
-    // Load "Heard on True Shuffle" playlist tracks to avoid repeats
+    // Step 1: Load "Heard on True Shuffle" playlist tracks to avoid repeats
     try {
         const heardPlaylist = playlistCache.heardOnTrueShuffle;
         if (heardPlaylist && heardPlaylist.tracks && heardPlaylist.tracks.items) {
@@ -6013,138 +6135,182 @@ async function advancedTrueShuffleAlgorithm() {
                     algorithmV2HeardTrackIds.add(item.track.id);
                 }
             });
+        } else {
+            console.log('ℹ️ No "Heard on True Shuffle" playlist found - this is normal for first use');
         }
     } catch (error) {
-        console.error('❌ Error loading heard tracks:', error);
+        console.warn('⚠️ Could not load heard tracks:', error.message);
     }
     
-    // Step 1: Find the first song - a liked song not heard in over a year
-    let firstTrack = null;
-    console.log('🔍 Finding first track - liked song not played in over a year...');
-    
+    // Step 2: Get recently played tracks to avoid immediate repeats
     try {
-        // Get user's saved tracks (liked songs)
-        const savedTracks = await fetchUserSavedTracks();
+        console.log('🕒 Loading recently played tracks...');
+        const recentResponse = await fetch('https://api.spotify.com/v1/me/player/recently-played?limit=50', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
         
-        if (savedTracks && savedTracks.length > 0) {
-            console.log(`✅ Found ${savedTracks.length} liked songs`);
+        if (recentResponse.ok) {
+            const recentData = await recentResponse.json();
+            const recentTracks = recentData.items || [];
+            console.log(`ℹ️ Found ${recentTracks.length} recently played tracks`);
             
-            // Get user's recently played tracks and listening history
-            const oneYearAgo = new Date();
-            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-            
-            // Get recently played tracks (up to 50 - Spotify API limit)
-            const recentlyPlayedResponse = await fetch('https://api.spotify.com/v1/me/player/recently-played?limit=50', {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+            recentTracks.forEach(item => {
+                if (item.track && item.track.id) {
+                    algorithmV2HeardTrackIds.add(item.track.id);
+                }
+            });
+        } else {
+            console.log('ℹ️ Could not fetch recently played tracks');
+        }
+    } catch (error) {
+        console.warn('⚠️ Could not load recently played tracks:', error.message);
+    }
+    
+    // Step 3: Build track pool from user's personal library
+    console.log('🏗️ Building track pool from user\'s personal library...');
+    const trackPool = [];
+    let firstTrack = null;
+    
+    // Priority 1: User's saved tracks (liked songs)
+    console.log('💖 Fetching user\'s saved tracks...');
+    const savedTracks = await fetchUserSavedTracks();
+    console.log(`📊 DEBUG: Got ${savedTracks.length} saved tracks from fetchUserSavedTracks`);
+    
+    if (savedTracks && savedTracks.length > 0) {
+        // Filter out already heard tracks
+        const unheardSavedTracks = savedTracks.filter(track => !algorithmV2HeardTrackIds.has(track.id));
+        
+        // Find tracks not played in over a year (use release date as proxy since we don't have play history)
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        
+        const oldTracks = unheardSavedTracks.filter(track => {
+            if (track.album && track.album.release_date) {
+                const releaseDate = new Date(track.album.release_date);
+                return releaseDate < oneYearAgo;
+            }
+            return false;
+        });
+        
+        // Select first track: prefer old tracks, fallback to any unheard saved track
+        if (oldTracks.length > 0) {
+            firstTrack = oldTracks[Math.floor(Math.random() * oldTracks.length)];
+            console.log(`✅ Selected first track from old liked songs: "${firstTrack.name}" by ${firstTrack.artists[0]?.name}`);
+        } else if (unheardSavedTracks.length > 0) {
+            firstTrack = unheardSavedTracks[Math.floor(Math.random() * unheardSavedTracks.length)];
+            console.log(`✅ Selected first track from liked songs: "${firstTrack.name}" by ${firstTrack.artists[0]?.name}`);
+        }
+        
+        // Add all unheard saved tracks to pool
+        trackPool.push(...unheardSavedTracks);
+        console.log(`💖 Added ${unheardSavedTracks.length} saved tracks to pool`);
+    } else {
+        console.log('ℹ️ No saved tracks found in user library');
+    }
+    
+    // Priority 2: User's playlist tracks
+    console.log('📋 Fetching user\'s playlist tracks...');
+    try {
+        const playlistTracks = await fetchUserPlaylistTracks(algorithmV2HeardTrackIds, 100);
+        if (playlistTracks && playlistTracks.length > 0) {
+            const newPlaylistTracks = playlistTracks.filter(track => 
+                !algorithmV2HeardTrackIds.has(track.id) && 
+                !trackPool.some(t => t.id === track.id)
+            );
+            trackPool.push(...newPlaylistTracks);
+            console.log(`📋 Added ${newPlaylistTracks.length} playlist tracks to pool`);
+        }
+    } catch (error) {
+        console.warn('⚠️ Could not fetch playlist tracks:', error.message);
+    }
+    
+    // Priority 3: User's top tracks
+    console.log('🔝 Fetching user\'s top tracks...');
+    try {
+        const topTracks = await fetchUserTopTracks(algorithmV2HeardTrackIds);
+        if (topTracks && topTracks.length > 0) {
+            const newTopTracks = topTracks.filter(track => 
+                !algorithmV2HeardTrackIds.has(track.id) && 
+                !trackPool.some(t => t.id === track.id)
+            );
+            trackPool.push(...newTopTracks);
+            console.log(`🔝 Added ${newTopTracks.length} top tracks to pool`);
+        }
+    } catch (error) {
+        console.warn('⚠️ Could not fetch top tracks:', error.message);
+    }
+    
+    // Priority 4: User's saved albums tracks
+    console.log('💿 Fetching user\'s saved albums...');
+    try {
+        const albumTracks = await fetchUserLibraryTracks(algorithmV2HeardTrackIds);
+        if (albumTracks && albumTracks.length > 0) {
+            const newAlbumTracks = albumTracks.filter(track => 
+                !algorithmV2HeardTrackIds.has(track.id) && 
+                !trackPool.some(t => t.id === track.id)
+            );
+            trackPool.push(...newAlbumTracks);
+            console.log(`💿 Added ${newAlbumTracks.length} album tracks to pool`);
+        }
+    } catch (error) {
+        console.warn('⚠️ Could not fetch album tracks:', error.message);
+    }
+    
+    // Ensure we have a first track
+    if (!firstTrack && trackPool.length > 0) {
+        firstTrack = trackPool[Math.floor(Math.random() * trackPool.length)];
+        console.log(`✅ Selected fallback first track: "${firstTrack.name}" by ${firstTrack.artists[0]?.name}`);
+    }
+    
+    // Final validation and fallback
+    if (!firstTrack || trackPool.length === 0) {
+        console.warn('⚠️ No tracks found in user library, falling back to recommendations...');
+        
+        // Fallback: Get some recommendation tracks
+        try {
+            const fallbackTracks = await fetchRandomRecommendations({ 
+                genres: ['pop', 'rock', 'indie', 'electronic'],
+                popularity: { min: 30, max: 100 },
+                excludeExplicit: false
             });
             
-            let recentlyPlayedIds = new Set();
-            if (recentlyPlayedResponse.ok) {
-                const recentlyPlayedData = await recentlyPlayedResponse.json();
-                
-                if (recentlyPlayedData.items && recentlyPlayedData.items.length > 0) {
-                    recentlyPlayedData.items.forEach(item => {
-                        if (item.track && item.track.id) {
-                            recentlyPlayedIds.add(item.track.id);
-                        }
-                    });
-                    console.log(`ℹ️ Found ${recentlyPlayedIds.size} recently played tracks`);
-                }
-            }
-            
-            // Get user's top tracks to also avoid very recently popular ones
-            let topTrackIds = new Set();
-            try {
-                const topTracks = await fetchUserTopTracks(new Set());
-                if (topTracks && topTracks.length > 0) {
-                    topTracks.slice(0, 20).forEach(track => {
-                        if (track.id) topTrackIds.add(track.id);
-                    });
-                    console.log(`ℹ️ Found ${topTrackIds.size} top tracks to deprioritize`);
-                }
-            } catch (error) {
-                console.warn('⚠️ Could not fetch top tracks:', error);
-            }
-            
-            // Filter liked songs by priority:
-            // 1. Not in "Heard from True Shuffle"
-            // 2. Not recently played
-            // 3. Not in top tracks (to find hidden gems)
-            const candidateTracks = savedTracks.filter(track => 
-                !algorithmV2HeardTrackIds.has(track.id) && 
-                !recentlyPlayedIds.has(track.id)
-            );
-            
-            const hiddenGems = candidateTracks.filter(track => !topTrackIds.has(track.id));
-            
-            // Prefer hidden gems, but fall back to any candidate track
-            const finalCandidates = hiddenGems.length > 0 ? hiddenGems : candidateTracks;
-            
-            if (finalCandidates.length > 0) {
-                // Use cryptographically secure randomness for selection
-                const randomIndex = Math.floor(cryptoRandom() * finalCandidates.length);
-                firstTrack = finalCandidates[randomIndex];
-                console.log('✅ Selected first track (not heard in a while):', firstTrack.name, 'by', firstTrack.artists[0]?.name);
-            } else {
-                console.log('⚠️ No unheard liked songs found, using random liked song');
-                // Fallback: random liked song not in heard playlist
-                const notHeardTracks = savedTracks.filter(track => !algorithmV2HeardTrackIds.has(track.id));
-                if (notHeardTracks.length > 0) {
-                    const randomIndex = Math.floor(cryptoRandom() * notHeardTracks.length);
-                    firstTrack = notHeardTracks[randomIndex];
-                } else {
-                    // Last resort: any liked song
-                    const randomIndex = Math.floor(cryptoRandom() * savedTracks.length);
-                    firstTrack = savedTracks[randomIndex];
-                }
-            }
-        } else {
-            console.warn('⚠️ No liked songs found, will use fallback for first track');
-        }
-    } catch (error) {
-        console.error('❌ Error finding first track:', error);
-    }
-    
-    // If we still don't have a first track, use true random track as fallback
-    if (!firstTrack) {
-        console.log('🔄 Using fallback method for first track...');
-        
-        try {
-            const randomTracks = await fetchTrulyRandomTracks();
-            if (randomTracks && randomTracks.length > 0) {
-                firstTrack = randomTracks[0];
-                console.log('✅ Selected random first track:', firstTrack.name);
+            if (fallbackTracks && fallbackTracks.length > 0) {
+                trackPool.push(...fallbackTracks);
+                firstTrack = trackPool[0];
+                console.log(`✅ Added ${fallbackTracks.length} fallback recommendation tracks`);
             }
         } catch (error) {
-            console.error('❌ Error in fallback first track selection:', error);
+            console.error('❌ Even fallback failed:', error);
+            return []; // Return empty array to trigger the main fallback
         }
     }
     
-    // Step 2: Build initial track pool and start the algorithm
-    console.log('🔄 Building initial track pool...');
-    let trackPool = [];
+    // Shuffle the track pool using cryptographic randomness
+    const shuffledPool = cryptographicShuffle([...trackPool]);
     
-    // If we have a first track, add it to the beginning of our pool
+    // Make sure first track is at the beginning
     if (firstTrack) {
-        trackPool.push(firstTrack);
-        // Mark as heard to avoid repeats
-        algorithmV2HeardTrackIds.add(firstTrack.id);
-        // Track artist for diversity
-        const artistName = firstTrack.artists[0]?.name;
-        if (artistName) {
-            algorithmV2ArtistPlayCount.set(artistName, 1);
-            algorithmV2RecentArtists.push(artistName);
+        const firstTrackIndex = shuffledPool.findIndex(t => t.id === firstTrack.id);
+        if (firstTrackIndex > 0) {
+            // Move first track to the beginning
+            shuffledPool.splice(firstTrackIndex, 1);
+            shuffledPool.unshift(firstTrack);
+        } else if (firstTrackIndex === -1) {
+            // First track not in pool, add it to the beginning
+            shuffledPool.unshift(firstTrack);
         }
     }
     
-    // Start gathering tracks from various sources asynchronously
-    // This will continue to run in the background while the first song plays
-    setTimeout(async () => {
-        await growTrackPoolV2(trackPool, algorithmV2HeardTrackIds, algorithmV2ArtistPlayCount, algorithmV2RecentArtists);
-    }, 100);
+    console.log(`🎯 Algorithm v2 completed successfully!`);
+    console.log(`✅ Track pool built with ${shuffledPool.length} total tracks`);
+    console.log(`🎵 First track: "${shuffledPool[0]?.name}" by ${shuffledPool[0]?.artists[0]?.name}`);
+    console.log(`📊 Pool composition:`, {
+        totalTracks: shuffledPool.length,
+        firstTrack: shuffledPool[0]?.name,
+        sampleTracks: shuffledPool.slice(1, 4).map(t => `${t.name} by ${t.artists[0]?.name}`)
+    });
     
-    // Return the track pool (which will start with just the first track)
-    return trackPool;
+    return shuffledPool;
 }
 
 // Helper function to continuously grow the track pool while songs are playing (v2)
