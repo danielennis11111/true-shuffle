@@ -6383,24 +6383,70 @@ function cryptographicShuffle(array) {
 // 4. Random genre, popularity, year, and mood selection
 // 5. No repeats from "Heard from True Shuffle" playlist
 // 6. Max 2 songs per artist before 30 other artists
+
+// NEW: Helper function to check if an artist should be excluded
+function isArtistExcluded(track, heardArtistIds, heardArtistNames) {
+    if (!track || !track.artists || track.artists.length === 0) return false;
+    
+    return track.artists.some(artist => {
+        return heardArtistIds.has(artist.id) || 
+               heardArtistNames.has(artist.name?.toLowerCase());
+    });
+}
+
+// NEW: Enhanced track filtering with artist exclusion
+function filterTracksWithArtistExclusion(tracks, heardTrackIds, heardArtistIds, heardArtistNames) {
+    return tracks.filter(track => {
+        // Basic validation
+        if (!track || !track.id || !track.name || !track.artists || track.artists.length === 0) {
+            return false;
+        }
+        
+        // Exclude already heard tracks (existing)
+        if (heardTrackIds.has(track.id)) {
+            return false;
+        }
+        
+        // NEW: Exclude tracks by artists we've heard before
+        if (isArtistExcluded(track, heardArtistIds, heardArtistNames)) {
+            return false;
+        }
+        
+        return true;
+    });
+}
+
 async function advancedTrueShuffleAlgorithm() {
-    console.log('🎲 Starting Advanced True Shuffle Algorithm v2...');
+    console.log('🎲 Starting Advanced True Shuffle Algorithm v3 - Enhanced Artist Exclusion...');
     
     // Use global variables instead of local ones
     algorithmV2HeardTrackIds.clear();
     algorithmV2ArtistPlayCount.clear();
     algorithmV2RecentArtists.length = 0;
     
-    // Step 1: Load "Heard on True Shuffle" playlist tracks to avoid repeats
+    // Step 1: Load "Heard on True Shuffle" playlist tracks AND ARTISTS to avoid repeats
+    const heardArtistIds = new Set(); // NEW: Track artist IDs for strict exclusion
+    const heardArtistNames = new Set(); // NEW: Track artist names for strict exclusion
+    
     try {
         const heardPlaylist = playlistCache.heardOnTrueShuffle;
         if (heardPlaylist && heardPlaylist.tracks && heardPlaylist.tracks.items) {
             console.log(`ℹ️ Found ${heardPlaylist.tracks.items.length} tracks in "Heard on True Shuffle" playlist`);
             heardPlaylist.tracks.items.forEach(item => {
                 if (item.track && item.track.id) {
+                    // Track the song itself (existing functionality)
                     algorithmV2HeardTrackIds.add(item.track.id);
+                    
+                    // NEW: Track all artists from heard songs for strict exclusion
+                    if (item.track.artists) {
+                        item.track.artists.forEach(artist => {
+                            if (artist.id) heardArtistIds.add(artist.id);
+                            if (artist.name) heardArtistNames.add(artist.name.toLowerCase());
+                        });
+                    }
                 }
             });
+            console.log(`🚫 STRICT ARTIST EXCLUSION: Excluding ${heardArtistIds.size} artist IDs and ${heardArtistNames.size} artist names`);
         } else {
             console.log('ℹ️ No "Heard on True Shuffle" playlist found - this is normal for first use');
         }
@@ -6444,7 +6490,7 @@ async function advancedTrueShuffleAlgorithm() {
     
     if (savedTracks && savedTracks.length > 0) {
         // Filter out already heard tracks
-        const unheardSavedTracks = savedTracks.filter(track => !algorithmV2HeardTrackIds.has(track.id));
+        const unheardSavedTracks = filterTracksWithArtistExclusion(savedTracks, algorithmV2HeardTrackIds, heardArtistIds, heardArtistNames);
         
         // Find tracks not played in over a year (use release date as proxy since we don't have play history)
         const oneYearAgo = new Date();
@@ -6479,10 +6525,8 @@ async function advancedTrueShuffleAlgorithm() {
     try {
         const playlistTracks = await fetchUserPlaylistTracks(algorithmV2HeardTrackIds, 100);
         if (playlistTracks && playlistTracks.length > 0) {
-            const newPlaylistTracks = playlistTracks.filter(track => 
-                !algorithmV2HeardTrackIds.has(track.id) && 
-                !trackPool.some(t => t.id === track.id)
-            );
+            const validPlaylistTracks = filterTracksWithArtistExclusion(playlistTracks, algorithmV2HeardTrackIds, heardArtistIds, heardArtistNames);
+            const newPlaylistTracks = validPlaylistTracks.filter(track => !trackPool.some(t => t.id === track.id));
             trackPool.push(...newPlaylistTracks);
             console.log(`📋 Added ${newPlaylistTracks.length} playlist tracks to pool`);
         }
@@ -6495,10 +6539,8 @@ async function advancedTrueShuffleAlgorithm() {
     try {
         const topTracks = await fetchUserTopTracks(algorithmV2HeardTrackIds);
         if (topTracks && topTracks.length > 0) {
-            const newTopTracks = topTracks.filter(track => 
-                !algorithmV2HeardTrackIds.has(track.id) && 
-                !trackPool.some(t => t.id === track.id)
-            );
+            const validTopTracks = filterTracksWithArtistExclusion(topTracks, algorithmV2HeardTrackIds, heardArtistIds, heardArtistNames);
+            const newTopTracks = validTopTracks.filter(track => !trackPool.some(t => t.id === track.id));
             trackPool.push(...newTopTracks);
             console.log(`🔝 Added ${newTopTracks.length} top tracks to pool`);
         }
@@ -6511,10 +6553,8 @@ async function advancedTrueShuffleAlgorithm() {
     try {
         const albumTracks = await fetchUserLibraryTracks(algorithmV2HeardTrackIds);
         if (albumTracks && albumTracks.length > 0) {
-            const newAlbumTracks = albumTracks.filter(track => 
-                !algorithmV2HeardTrackIds.has(track.id) && 
-                !trackPool.some(t => t.id === track.id)
-            );
+            const validAlbumTracks = filterTracksWithArtistExclusion(albumTracks, algorithmV2HeardTrackIds, heardArtistIds, heardArtistNames);
+            const newAlbumTracks = validAlbumTracks.filter(track => !trackPool.some(t => t.id === track.id));
             trackPool.push(...newAlbumTracks);
             console.log(`💿 Added ${newAlbumTracks.length} album tracks to pool`);
         }
@@ -6567,7 +6607,7 @@ async function advancedTrueShuffleAlgorithm() {
         }
     }
     
-    console.log(`🎯 Algorithm v2 completed successfully!`);
+    console.log(`🎯 Algorithm v3 completed successfully with strict artist exclusion!`);
     console.log(`✅ Track pool built with ${shuffledPool.length} total tracks`);
     console.log(`🎵 First track: "${shuffledPool[0]?.name}" by ${shuffledPool[0]?.artists[0]?.name}`);
     console.log(`📊 Pool composition:`, {
