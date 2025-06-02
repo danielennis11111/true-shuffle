@@ -847,8 +847,10 @@ async function fetchRecommendations() {
     showLoading();
     let tracks = [];
     
-    // Use the new algorithm for both modes
-    if (currentShuffleType === 'true-shuffle-library' || currentShuffleType === 'true-shuffle-all') {
+    // Use the new algorithm for all personalized modes (including true-random which should be personalized)
+    if (currentShuffleType === 'true-shuffle-library' || 
+        currentShuffleType === 'true-shuffle-all' || 
+        currentShuffleType === 'true-random') {
       console.log('🎯 Using Advanced True Shuffle Algorithm v2...');
       console.log('📊 DEBUG: Current shuffle type:', currentShuffleType);
       console.log('📊 DEBUG: Access token exists:', !!accessToken);
@@ -875,6 +877,7 @@ async function fetchRecommendations() {
         // Fallback to regular algorithms
         switch(currentShuffleType) {
           case 'true-shuffle-all':
+          case 'true-random':
             console.log('📊 DEBUG: Fallback to fetchTrueShuffleAllSpotify');
             tracks = await fetchTrueShuffleAllSpotify();
             break;
@@ -885,10 +888,11 @@ async function fetchRecommendations() {
         }
       }
     } else {
-      console.log('📊 DEBUG: Not using algorithm v2, shuffle type:', currentShuffleType);
+      console.log('📊 DEBUG: Using fallback algorithms, shuffle type:', currentShuffleType);
       // Use regular shuffle algorithms for other modes
       switch(currentShuffleType) {
         case 'true-shuffle-all':
+        case 'true-random':
           tracks = await fetchTrueShuffleAllSpotify();
           break;
         case 'true-shuffle-library':
@@ -909,10 +913,12 @@ async function fetchRecommendations() {
       if (algorithmV2TrackPool.length > 0) {
         shuffledTracks = [...tracks]; // Just the first track initially
         currentTrackIndex = 0;
+        console.log('📊 DEBUG: Using algorithm v2 track ordering');
       } else {
         // Apply cryptographic shuffle for regular algorithms
         shuffledTracks = cryptographicShuffle([...tracks]);
         currentTrackIndex = 0;
+        console.log('📊 DEBUG: Applied cryptographic shuffle to tracks');
       }
       
       // Start playing the first track
@@ -3387,6 +3393,14 @@ function trackShuffleUsage(shuffleType, count = 1) {
 function discoverMusic() {
   console.log('🎵 Starting radio mode...');
   
+  // Set default shuffle type to use personalized library algorithm
+  if (!currentShuffleType || currentShuffleType === 'true-random') {
+    console.log('📊 DEBUG: Setting shuffle type to true-shuffle-library for personalized experience');
+    currentShuffleType = 'true-shuffle-library';
+  }
+  
+  console.log('📊 DEBUG: Using shuffle type:', currentShuffleType);
+  
   // Check usage limits before proceeding
   const canProceed = trackShuffleUsage(currentShuffleType, 1);
   if (!canProceed) {
@@ -4043,7 +4057,7 @@ const defaultSettings = {
     languages: ['en'], // Language filtering (ISO codes)
     yearFrom: 1950, // Year range start
     yearTo: 2024,   // Year range end
-    shuffleType: 'true-random', // Core shuffle algorithm
+    shuffleType: 'true-shuffle-library', // Use personalized library shuffle by default
     
     // Audio & Discovery Settings
     popularity: 70, // 0-100, lower = more underground music
@@ -4637,7 +4651,7 @@ function collectCurrentSettings() {
         
         // Collect shuffle type
         const shuffleTypeSelect = document.getElementById('shuffle-type');
-        settings.shuffleType = shuffleTypeSelect ? shuffleTypeSelect.value : 'true-random';
+        settings.shuffleType = shuffleTypeSelect ? shuffleTypeSelect.value : 'true-shuffle-library';
         
         // Collect popularity setting
         const popularitySlider = document.getElementById('popularity-slider');
@@ -5432,7 +5446,7 @@ window.testYearSettings = async function(yearFrom, yearTo) {
     moods: [],
     yearFrom: yearFrom,
     yearTo: yearTo,
-    shuffleType: 'true-random'
+    shuffleType: 'true-shuffle-library'
   };
   
   // Save settings
