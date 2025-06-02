@@ -21,40 +21,36 @@
         </div>
     </div>
 
-    <!-- Header -->
-    <header class="header">
-        <div class="header-content">
-            <div class="app-branding">
-                <div class="logo">
-                    <i class="fas fa-random logo-icon"></i>
-                    <h1 class="app-name">True Shuffle Radio</h1>
+    <!-- Left Sidebar Navigation -->
+    <aside class="sidebar">
+        <div class="sidebar-content">
+            <!-- Logo section at top -->
+            <div class="sidebar-header">
+                <div class="app-branding">
+                    <div class="logo">
+                        <i class="fas fa-random logo-icon"></i>
+                        <h1 class="app-name">True Shuffle</h1>
+                    </div>
+                    <span class="app-version">2.1</span>
                 </div>
-                <span class="app-version">2.1</span>
             </div>
 
-            <section id="config-section" class="">
-                <div class="config-container">
-                    
-                    
-                    
-                    
-                    
-    
-                    <button id="discover-btn" class="discover-btn">
-                        <i class="fas fa-play"></i>
-                        Start Radio
-                    </button>
-                </div>
-            </section>
-            
-            <div class="user-area">
+            <!-- Navigation items in middle (can be expanded later) -->
+            <nav class="sidebar-nav">
+                <!-- Future navigation items can go here -->
+            </nav>
+
+            <!-- User section at bottom -->
+            <div class="sidebar-footer">
                 <div id="user-display" class="user-display hidden">
                     <img id="user-image" src="" alt="Profile Picture" class="user-image">
-                    <span id="user-name" class="user-name">User Name</span>
-                    <button id="logout-btn" class="logout-btn">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Logout
-                    </button>
+                    <div class="user-info">
+                        <span id="user-name" class="user-name">User Name</span>
+                        <button id="logout-btn" class="logout-btn">
+                            <i class="fas fa-sign-out-alt"></i>
+                            Logout
+                        </button>
+                    </div>
                 </div>
                 
                 <button id="login-btn" class="login-btn">
@@ -63,14 +59,18 @@
                 </button>
             </div>
         </div>
-    </header>
+    </aside>
 
-    <!-- Main App -->
-    <main id="main-content" class="main-content">
+    <!-- Main Content Area (adjusted for sidebar) -->
+    <main id="main-content" class="main-content with-sidebar">
         
-        <!-- Discovery Configuration -->
+        <!-- Hidden config section (no longer needed with auto-start) -->
+        <section id="config-section" class="hidden">
+            <div class="config-container">
+                <!-- Start Radio button removed - radio now auto-starts after authentication -->
+            </div>
+        </section>
         
-
         <!-- Vinyl Player -->
         <section id="player-section" class="player-section hidden">
             <div class="player-container">

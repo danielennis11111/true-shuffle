@@ -398,18 +398,11 @@ function setupEventListeners() {
       });
     }
     
-    // Discovery buttons
-    const discoverBtn = document.getElementById('discover-btn');
+    // Discovery buttons (Start Radio button removed - auto-starts now)
     const discoverMoreBtn = document.getElementById('discover-more-btn');
     const backToConfigBtn = document.getElementById('back-to-config-btn');
     
-    if (discoverBtn) {
-      discoverBtn.addEventListener('click', () => {
-        console.log('🔄 Starting music discovery...');
-        discoverMusic();
-      });
-      console.log('✅ Discover button listener added');
-    }
+    // Note: discover-btn (Start Radio) removed - radio auto-starts after authentication
     
     if (discoverMoreBtn) {
       discoverMoreBtn.addEventListener('click', () => {
@@ -767,6 +760,14 @@ async function loadUserData() {
       logoutButton.addEventListener('click', logout);
       console.log('✅ Logout button listener added');
     }
+
+    // AUTO-START: Automatically begin radio after successful authentication
+    console.log('🎵 Auto-starting True Shuffle Radio...');
+    setTimeout(() => {
+      // Give the UI a moment to load, then start the radio
+      console.log('🚀 Launching radio automatically after authentication');
+      discoverMusic();
+    }, 1500); // Small delay to ensure all components are ready
 
   } catch (error) {
     console.error('❌ Error loading user data:', error);
@@ -6530,31 +6531,53 @@ async function advancedTrueShuffleAlgorithm() {
 
 // Helper function to continuously grow the track pool while songs are playing (v2)
 async function growTrackPoolV2(trackPool, heardTrackIds, artistPlayCount, recentArtists) {
-    console.log('🌱 Starting to grow track pool v2 in background...');
+    console.log('🌱 Starting to grow track pool v2 with enhanced diversity...');
     
-    // Track sources based on user's personal music
+    // Track sources based on user's personal music - EXPANDED for more variety
     const trackSources = [
         { 
             name: 'User Liked Songs', 
             fn: fetchUserSavedTracks,
-            weight: 40 // 40% of tracks from liked songs
+            weight: 30, // Reduced from 40% to make room for more sources
+            targetCount: 150 // Specific count for this source
         },
         { 
             name: 'User Playlists', 
-            fn: () => fetchUserPlaylistTracks(heardTrackIds, 100),
-            weight: 30 // 30% from playlists
+            fn: () => fetchUserPlaylistTracks(heardTrackIds, 150),
+            weight: 25, // Reduced to make room for more variety
+            targetCount: 125
         },
         { 
             name: 'User Top Tracks', 
             fn: () => fetchUserTopTracks(heardTrackIds),
-            weight: 15 // 15% from top tracks
+            weight: 15,
+            targetCount: 75
         },
         { 
             name: 'User Library Albums', 
             fn: () => fetchUserLibraryTracks(heardTrackIds),
-            weight: 15 // 15% from saved albums
+            weight: 15,
+            targetCount: 75
+        },
+        { 
+            name: 'Spotify Recommendations', 
+            fn: () => fetchRandomRecommendations({}),
+            weight: 10, // Add recommendations for discovery
+            targetCount: 50
+        },
+        { 
+            name: 'Mixed Genre Discovery', 
+            fn: fetchMixedGenreTracks,
+            weight: 5, // Small amount of discovery tracks
+            targetCount: 25
         }
     ];
+    
+    // Total target pool size: 500 tracks (up from 200)
+    const totalTargetSize = 500;
+    let currentPoolSize = trackPool.length;
+    
+    console.log(`🎯 Target pool size: ${totalTargetSize}, Current: ${currentPoolSize}`);
     
     // Process each source and build weighted pool
     for (const source of trackSources) {
@@ -6571,32 +6594,76 @@ async function growTrackPoolV2(trackPool, heardTrackIds, artistPlayCount, recent
                 );
                 
                 if (newTracks.length > 0) {
-                    // Calculate how many tracks to take based on weight
-                    const targetCount = Math.floor((source.weight / 100) * 200); // Target pool size of 200
-                    const tracksToAdd = newTracks.slice(0, Math.min(targetCount, newTracks.length));
+                    // Use the specific target count for this source
+                    const tracksToAdd = newTracks.slice(0, Math.min(source.targetCount, newTracks.length));
                     
-                    console.log(`✅ Adding ${tracksToAdd.length} tracks from ${source.name}`);
+                    console.log(`✅ Adding ${tracksToAdd.length} tracks from ${source.name} (filtered from ${tracks.length})`);
                     
-                    // Shuffle the new tracks before adding them
+                    // Shuffle the new tracks before adding them for randomness
                     const shuffledNewTracks = cryptographicShuffle(tracksToAdd);
                     
                     // Add to pool
                     trackPool.push(...shuffledNewTracks);
                     
                     console.log(`🎵 Track pool now has ${trackPool.length} tracks`);
+                    
+                    // Log artist diversity metrics
+                    const poolArtists = new Set(trackPool.map(t => t.artists[0]?.name).filter(Boolean));
+                    console.log(`🎭 Unique artists in pool: ${poolArtists.size} (${(poolArtists.size / trackPool.length * 100).toFixed(1)}% diversity)`);
                 }
             }
             
             // Small delay to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 300));
+            await new Promise(resolve => setTimeout(resolve, 200));
             
         } catch (error) {
             console.error(`❌ Error fetching from ${source.name}:`, error);
         }
     }
     
-    console.log('✅ Finished initial track pool growth');
+    // If we still don't have enough tracks, try to fetch more from the most successful sources
+    if (trackPool.length < totalTargetSize * 0.7) { // If we have less than 70% of target
+        console.log('🔄 Pool size below target, fetching additional tracks...');
+        
+        try {
+            // Try to get more from playlists and saved tracks
+            const additionalSaved = await fetchUserSavedTracks();
+            const additionalPlaylists = await fetchUserPlaylistTracks(heardTrackIds, 100);
+            
+            const combinedAdditional = [...(additionalSaved || []), ...(additionalPlaylists || [])];
+            const newAdditionalTracks = combinedAdditional.filter(track => 
+                track.id && 
+                !heardTrackIds.has(track.id) && 
+                !trackPool.some(t => t.id === track.id)
+            );
+            
+            if (newAdditionalTracks.length > 0) {
+                const shuffledAdditional = cryptographicShuffle(newAdditionalTracks);
+                const toAdd = shuffledAdditional.slice(0, Math.min(100, newAdditionalTracks.length));
+                trackPool.push(...toAdd);
+                console.log(`✅ Added ${toAdd.length} additional tracks to reach target`);
+            }
+        } catch (error) {
+            console.error('❌ Error fetching additional tracks:', error);
+        }
+    }
+    
+    // Final shuffle of the entire pool to ensure randomness
+    const finalShuffledPool = cryptographicShuffle(trackPool);
+    trackPool.length = 0; // Clear the original array
+    trackPool.push(...finalShuffledPool); // Replace with shuffled version
+    
+    console.log('✅ Finished enhanced track pool growth');
     console.log(`🎵 Final pool size: ${trackPool.length} tracks`);
+    
+    // Final diversity metrics
+    const finalArtists = new Set(trackPool.map(t => t.artists[0]?.name).filter(Boolean));
+    const finalGenres = new Set(trackPool.flatMap(t => t.genres || ['unknown']));
+    
+    console.log(`🎭 Final diversity metrics:`);
+    console.log(`   • Unique artists: ${finalArtists.size} (${(finalArtists.size / trackPool.length * 100).toFixed(1)}% diversity)`);
+    console.log(`   • Unique genres: ${finalGenres.size}`);
+    console.log(`   • Average tracks per artist: ${(trackPool.length / finalArtists.size).toFixed(1)}`);
 }
 
 // New function to fetch user's library tracks (saved albums)
@@ -6662,12 +6729,15 @@ async function fetchUserLibraryTracks(usedTrackIds) {
 
 // Enhanced next track selection with randomized criteria
 async function selectNextTrack(trackPool, heardTrackIds, artistPlayCount, recentArtists) {
-    if (!trackPool || trackPool.length === 0) {
+    console.log('🎯 Selecting next track with enhanced artist diversity...');
+    console.log(`📊 Pool size: ${trackPool.length}, Heard: ${heardTrackIds.size}, Artists tracked: ${artistPlayCount.size}`);
+    
+    if (trackPool.length === 0) {
         console.warn('⚠️ Track pool is empty');
         return null;
     }
     
-    // Filter available tracks (not heard, artist diversity rules)
+    // Filter available tracks with STRICT artist diversity rules (100 songs between repeats)
     let availableTracks = trackPool.filter(track => {
         if (!track || !track.id || heardTrackIds.has(track.id)) {
             return false;
@@ -6676,14 +6746,16 @@ async function selectNextTrack(trackPool, heardTrackIds, artistPlayCount, recent
         const artistName = track.artists[0]?.name;
         if (!artistName) return true;
         
-        // Check artist diversity rule: max 2 songs per artist before 30 others
+        // ENHANCED RULE: No artist can repeat within 100 songs by OTHER artists
         const artistCount = artistPlayCount.get(artistName) || 0;
-        if (artistCount >= 2) {
-            // Count how many different artists have played since this artist
+        if (artistCount > 0) {
+            // Find the last time this artist played
             const artistIndex = recentArtists.lastIndexOf(artistName);
             if (artistIndex !== -1) {
+                // Count unique OTHER artists since this artist last played
                 const artistsSince = new Set(recentArtists.slice(artistIndex + 1));
-                if (artistsSince.size < 30) {
+                if (artistsSince.size < 100) {
+                    console.log(`🚫 Skipping ${artistName} - only ${artistsSince.size} artists since last play (need 100)`);
                     return false; // Skip this artist
                 }
             }
@@ -6692,9 +6764,56 @@ async function selectNextTrack(trackPool, heardTrackIds, artistPlayCount, recent
         return true;
     });
     
+    console.log(`✅ Available tracks after artist filtering: ${availableTracks.length}`);
+    
+    // If no tracks available with strict rules, progressively relax constraints
     if (availableTracks.length === 0) {
-        console.warn('⚠️ No available tracks after filtering, relaxing artist rules');
-        // Relax rules if no tracks available
+        console.warn('⚠️ No tracks with 100-artist rule, trying 50-artist rule...');
+        
+        // Try 50 artists instead of 100
+        availableTracks = trackPool.filter(track => {
+            if (!track || !track.id || heardTrackIds.has(track.id)) return false;
+            
+            const artistName = track.artists[0]?.name;
+            if (!artistName) return true;
+            
+            const artistCount = artistPlayCount.get(artistName) || 0;
+            if (artistCount > 0) {
+                const artistIndex = recentArtists.lastIndexOf(artistName);
+                if (artistIndex !== -1) {
+                    const artistsSince = new Set(recentArtists.slice(artistIndex + 1));
+                    if (artistsSince.size < 50) return false;
+                }
+            }
+            return true;
+        });
+    }
+    
+    // If still no tracks, try minimum 25 artists
+    if (availableTracks.length === 0) {
+        console.warn('⚠️ No tracks with 50-artist rule, trying 25-artist rule...');
+        
+        availableTracks = trackPool.filter(track => {
+            if (!track || !track.id || heardTrackIds.has(track.id)) return false;
+            
+            const artistName = track.artists[0]?.name;
+            if (!artistName) return true;
+            
+            const artistCount = artistPlayCount.get(artistName) || 0;
+            if (artistCount > 0) {
+                const artistIndex = recentArtists.lastIndexOf(artistName);
+                if (artistIndex !== -1) {
+                    const artistsSince = new Set(recentArtists.slice(artistIndex + 1));
+                    if (artistsSince.size < 25) return false;
+                }
+            }
+            return true;
+        });
+    }
+    
+    // Final fallback: just avoid heard tracks
+    if (availableTracks.length === 0) {
+        console.warn('⚠️ Using final fallback - only avoiding heard tracks');
         availableTracks = trackPool.filter(track => 
             track && track.id && !heardTrackIds.has(track.id)
         );
@@ -6703,6 +6822,36 @@ async function selectNextTrack(trackPool, heardTrackIds, artistPlayCount, recent
     if (availableTracks.length === 0) {
         console.warn('⚠️ Still no available tracks');
         return null;
+    }
+    
+    // Enhanced selection with bias toward lesser-played artists
+    const artistPlayFrequency = new Map();
+    availableTracks.forEach(track => {
+        const artistName = track.artists[0]?.name;
+        if (artistName) {
+            const playCount = artistPlayCount.get(artistName) || 0;
+            if (!artistPlayFrequency.has(playCount)) {
+                artistPlayFrequency.set(playCount, []);
+            }
+            artistPlayFrequency.get(playCount).push(track);
+        }
+    });
+    
+    // Prefer tracks from artists with fewer plays (bias toward discovery)
+    const sortedFrequencies = Array.from(artistPlayFrequency.keys()).sort((a, b) => a - b);
+    
+    // 70% chance to pick from least-played artists, 30% chance for variety
+    const useLeastPlayed = Math.random() < 0.7;
+    let selectedTracks;
+    
+    if (useLeastPlayed && sortedFrequencies.length > 0) {
+        // Pick from the 2 lowest play count groups
+        const lowPlayCounts = sortedFrequencies.slice(0, Math.min(2, sortedFrequencies.length));
+        selectedTracks = lowPlayCounts.flatMap(count => artistPlayFrequency.get(count));
+        console.log(`🎯 Biasing toward lesser-played artists (${selectedTracks.length} tracks)`);
+    } else {
+        selectedTracks = availableTracks;
+        console.log(`🎲 Using full available pool for variety (${selectedTracks.length} tracks)`);
     }
     
     // Randomized selection criteria (pick one at random)
@@ -6720,7 +6869,7 @@ async function selectNextTrack(trackPool, heardTrackIds, artistPlayCount, recent
     
     console.log(`🎲 Using selection method: ${selectedMethod.name}`);
     
-    const selectedTrack = selectedMethod.fn(availableTracks);
+    const selectedTrack = selectedMethod.fn(selectedTracks);
     
     if (selectedTrack) {
         // Update tracking
@@ -6730,13 +6879,14 @@ async function selectNextTrack(trackPool, heardTrackIds, artistPlayCount, recent
             artistPlayCount.set(artistName, (artistPlayCount.get(artistName) || 0) + 1);
             recentArtists.push(artistName);
             
-            // Keep recent artists list manageable
-            if (recentArtists.length > 100) {
+            // Keep recent artists list manageable (maintain 150 entries for better tracking)
+            if (recentArtists.length > 150) {
                 recentArtists.splice(0, 50); // Remove oldest 50
             }
         }
         
-        console.log(`✅ Selected: ${selectedTrack.name} by ${artistName} (${selectedMethod.name})`);
+        console.log(`✅ Selected: "${selectedTrack.name}" by ${artistName} (${selectedMethod.name})`);
+        console.log(`📊 Artist "${artistName}" play count: ${artistPlayCount.get(artistName)}`);
     }
     
     return selectedTrack;
