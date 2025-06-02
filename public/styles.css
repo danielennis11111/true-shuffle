@@ -81,7 +81,7 @@ body {
 }
 
 .sidebar-header {
-    margin-bottom: 40px;
+    margin-bottom: 0px;
 }
 
 .sidebar-header .app-branding {
@@ -229,63 +229,143 @@ body {
         margin-left: 250px;
         padding: 30px;
     }
+    
+    /* Scale the entire player visual section down together */
+    .player-visual-section {
+        transform: scale(0.9);
+        gap: 2rem;
+    }
 }
 
 @media (max-width: 768px) {
+    /* SHOW hamburger button on mobile */
+    .mobile-hamburger-btn {
+        display: flex !important;
+    }
+    
+    /* Keep sidebar visible but compact on mobile - match desktop colors */
     .sidebar {
-        transform: translateX(-100%);
-        transition: transform 0.3s ease;
+        width: 100%; /* Full width on mobile */
+        height: auto; /* Auto height */
+        position: relative; /* Not fixed */
+        transform: none; /* Don't hide sidebar */
+        transition: none;
+        background: linear-gradient(180deg, rgba(18, 18, 18, 0.5) 0%, rgba(0, 0, 0, 0.2) 100%); /* Match desktop */
+        backdrop-filter: blur(20px); /* Match desktop */
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     }
     
-    .sidebar.mobile-open {
-        transform: translateX(0);
+    /* Hide the navigation content by default on mobile */
+    .sidebar-nav,
+    .sidebar-footer {
+        display: none;
+        transition: all 0.3s ease;
     }
     
-    .main-content {
-        padding: 1rem;
+    /* Show nav content when mobile-open class is added */
+    .sidebar.mobile-open .sidebar-nav,
+    .sidebar.mobile-open .sidebar-footer {
+        display: block;
     }
     
+    /* Reduce spacing in sidebar header for mobile */
+    .sidebar-header {
+        padding: 10px 20px; /* Reduced from 15px */
+        text-align: center;
+    }
+    
+    .sidebar-header .logo {
+        justify-content: center;
+        margin-bottom: 0; /* Remove any default margin */
+    }
+    
+    .sidebar-header .app-name {
+        margin-bottom: 0; /* Remove bottom margin */
+    }
+
+    .main-content.with-sidebar {
+        margin-left: 0;
+        padding: 20px;
+        padding-top: 15px; /* Reduced top padding */
+    }
+
     .config-container h2 {
         font-size: 1.8rem;
     }
-    
-    /* Mobile layout for player visual section */
+
+    /* Scale the entire player visual section down together but maintain overlap */
     .player-visual-section {
-        flex-direction: column;
-        gap: 1.5rem;
+        transform: scale(0.8);
+        flex-direction: row; /* Keep horizontal layout on mobile */
+        gap: 0; /* Remove gap to maintain overlap */
+        margin-bottom: 1rem;
+        justify-content: center;
     }
     
+    /* Maintain overlap on mobile - same as desktop */
     .static-album-art {
-        width: 200px;
-        height: 200px;
+        width: 320px;
+        height: 320px;
+        margin-right: -219px; /* Keep the overlap! */
+        margin-bottom: 0;
+        z-index: 100000;
+        margin-top: 0px;
     }
-    
-    .record-disc {
-        width: 200px;
-        height: 200px;
-    }
-    
-    .album-cover {
-        width: 160px;
-        height: 160px;
-    }
-    
+
     .player-controls {
         gap: 1rem;
     }
-    
+
     .control-btn {
         width: 50px;
         height: 50px;
     }
-    
+
     .play-btn {
         width: 60px;
         height: 60px;
     }
-    
+
     .mood-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    /* Even smaller scale for very small screens but keep the overlap */
+    .player-visual-section {
+        transform: scale(0.65);
+        gap: 0; /* No gap to maintain overlap */
+    }
+    
+    /* Maintain overlap on small mobile too */
+    .static-album-art {
+        margin-right: -219px; /* Keep overlap consistent */
+    }
+    
+    .main-content.with-sidebar {
+        padding: 15px;
+        padding-top: 10px; /* Reduced to match smaller header */
+    }
+
+    .track-info h3 {
+        font-size: 1.2rem;
+    }
+
+    .action-btn {
+        width: 35px;
+        height: 35px;
+        font-size: 0.9rem;
+    }
+    
+    .control-btn {
+        width: 45px;
+        height: 45px;
+    }
+
+    .play-btn {
+        width: 55px;
+        height: 55px;
     }
 }
 
@@ -618,8 +698,12 @@ body {
     justify-content: center;
     gap: 3rem;
     margin-bottom: 2rem;
+    /* Scale as one unit */
+    transform-origin: center;
+    transition: transform 0.3s ease;
 }
 
+/* Static album art */
 .static-album-art {
     width: 320px;
     height: 320px;
@@ -630,6 +714,8 @@ body {
     margin-right: -219px;
     z-index: 100000;
     margin-top: 0px;
+    /* Maintain aspect ratio */
+    flex-shrink: 0;
 }
 
 .static-album-art:hover {
@@ -643,12 +729,12 @@ body {
     border-radius: 15px;
 }
 
-
-
 /* Vinyl Player */
 .vinyl-player {
     margin-bottom: 0;
     position: relative;
+    /* Maintain aspect ratio */
+    flex-shrink: 0;
 }
 
 .vinyl-record {
@@ -863,86 +949,6 @@ body {
 /* Utilities */
 .hidden {
     display: none;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .main-content {
-        padding: 2rem 1rem;
-    }
-    
-    .config-container h2 {
-        font-size: 2rem;
-    }
-    
-    .record-disc {
-        width: 250px;
-        height: 250px;
-    }
-    
-    .album-cover {
-        width: 100px;
-        height: 100px;
-    }
-    
-    .player-controls {
-        gap: 1.5rem;
-    }
-    
-    .control-btn {
-        width: 45px;
-        height: 45px;
-    }
-    
-    .play-btn {
-        width: 60px;
-        height: 60px;
-    }
-    
-    .mood-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 480px) {
-    .header {
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    /* Extra small screens adjustments */
-    .player-visual-section {
-        gap: 1rem;
-    }
-
-    .static-album-art {
-        width: 150px;
-        height: 150px;
-    }
-
-    .record-disc {
-        width: 150px;
-        height: 150px;
-    }
-
-    .album-cover {
-        width: 120px;
-        height: 120px;
-    }
-
-    .track-info h3 {
-        font-size: 1.2rem;
-    }
-
-    .action-buttons {
-        justify-content: center;
-    }
-
-    .action-btn {
-        width: 35px;
-        height: 35px;
-        font-size: 0.9rem;
-    }
 }
 
 /* End of existing CSS styles */
@@ -2258,4 +2264,50 @@ img#user-image {
 
 div#user-display {
     align-items: center;
+}
+
+/* Mobile Hamburger Button - Clean minimal style */
+.mobile-hamburger-btn {
+    display: none; /* Hidden on desktop by default */
+    position: fixed;
+    top: 20px;
+    right: 20px; /* Move to right side for better UX */
+    z-index: 9999;
+    background: transparent; /* No background */
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    flex-direction: column;
+    justify-content: space-around;
+    align-items: center;
+    cursor: pointer;
+    padding: 8px;
+    transition: all 0.3s ease;
+}
+
+.mobile-hamburger-btn:hover {
+    background: rgba(255, 255, 255, 0.1); /* Subtle hover */
+    transform: scale(1.05);
+}
+
+.hamburger-line {
+    width: 22px;
+    height: 3px;
+    background: white;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+/* Hamburger Animation */
+.mobile-hamburger-btn.active .hamburger-line:nth-child(1) {
+    transform: rotate(45deg) translate(6px, 6px);
+}
+
+.mobile-hamburger-btn.active .hamburger-line:nth-child(2) {
+    opacity: 0;
+}
+
+.mobile-hamburger-btn.active .hamburger-line:nth-child(3) {
+    transform: rotate(-45deg) translate(6px, -6px);
 } 

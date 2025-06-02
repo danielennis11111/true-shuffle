@@ -311,6 +311,49 @@ function setupEventListeners() {
   try {
     console.log('🔗 Setting up event listeners...');
     
+    // Mobile hamburger menu functionality
+    const mobileHamburger = document.getElementById('mobile-hamburger');
+    const sidebar = document.querySelector('.sidebar');
+    
+    console.log('🔍 Hamburger debug on load:', {
+      hamburgerExists: !!mobileHamburger,
+      sidebarExists: !!sidebar,
+      windowWidth: window.innerWidth,
+      hamburgerDisplay: mobileHamburger ? window.getComputedStyle(mobileHamburger).display : 'not found'
+    });
+    
+    if (mobileHamburger && sidebar) {
+      mobileHamburger.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        mobileHamburger.classList.toggle('active');
+        sidebar.classList.toggle('mobile-open');
+        console.log('🍔 Mobile menu toggled:', sidebar.classList.contains('mobile-open'));
+      });
+      console.log('✅ Mobile hamburger listener added');
+    } else {
+      console.error('❌ Mobile hamburger setup failed - elements not found');
+    }
+    
+    // Close mobile menu when clicking outside sidebar on mobile
+    document.addEventListener('click', function(e) {
+      if (window.innerWidth <= 768 && sidebar && mobileHamburger) {
+        const sidebarNav = sidebar.querySelector('.sidebar-nav');
+        const sidebarFooter = sidebar.querySelector('.sidebar-footer');
+        
+        // Check if click is outside the nav areas and hamburger
+        if (!mobileHamburger.contains(e.target) && 
+            !sidebarNav?.contains(e.target) && 
+            !sidebarFooter?.contains(e.target)) {
+          if (sidebar.classList.contains('mobile-open')) {
+            mobileHamburger.classList.remove('active');
+            sidebar.classList.remove('mobile-open');
+            console.log('🍔 Mobile nav closed by outside click');
+          }
+        }
+      }
+    });
+    
     // Login/logout buttons
     if (loginButton) {
       loginButton.addEventListener('click', redirectToSpotifyAuth);
