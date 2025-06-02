@@ -6,122 +6,71 @@ let accessToken = null;
 let refreshToken = null;
 let player = null;
 let deviceId = null;
-let currentTrack = null;
-let currentShuffleType = 'fisherYates';
+let userInfo = null;
+let userLibrary = [];
 let shuffledTracks = [];
-let currentTrackIndex = 0;
+let currentTrackIndex = -1;
+let currentTrack = null;
 let likedSongs = new Set();
 let isTrackLiked = false;
 let audioAnalysisData = null;
 let playbackState = {
-  isPlaying: false,
-  currentTrack: null,
-  progressMs: 0,
-  durationMs: 0
+    isPlaying: false,
+    currentTrack: null,
+    progressMs: 0,
+    durationMs: 0
 };
 let progressInterval = null;
 let colorThief = null; // Initialize safely after DOM loads
 let playlistCache = {
-  likedFromTrueShuffle: null,
-  heardOnTrueShuffle: null
+    likedFromTrueShuffle: null,
+    heardOnTrueShuffle: null
 };
 let spotifyPlayer;
 let isPlaying = false;
-let selectedMood = null; // New: track selected mood
-let selectedGenres = []; // New: track selected genres for mix mode
-let currentTrackFeatures = null; // New: track audio features
-let currentUserId = null; // Current logged-in user ID
-
-// Global variables for the new algorithm
-let algorithmV2TrackPool = [];
-let algorithmV2HeardTrackIds = new Set();
-let algorithmV2ArtistPlayCount = new Map();
-let algorithmV2RecentArtists = [];
 
 // Mood configurations for audio features
-const moodConfigs = {
+const moodConfigurations = {
   happy: {
-    name: "Happy & Upbeat",
-    icon: "fas fa-sun",
-    color: "text-yellow-400",
-    filters: {
-      min_valence: 0.6,
-      min_energy: 0.5,
-      target_valence: 0.8,
-      target_energy: 0.7
-    }
+    minValence: 0.6,
+    minEnergy: 0.5,
+    minDanceability: 0.5
   },
   chill: {
-    name: "Chill & Relaxed",
-    icon: "fas fa-leaf", 
-    color: "text-green-400",
-    filters: {
-      max_energy: 0.6,
-      min_acousticness: 0.3,
-      target_valence: 0.5,
-      target_energy: 0.3
-    }
+    maxEnergy: 0.5,
+    maxLoudness: -8,
+    minValence: 0.3,
+    maxTempo: 120
   },
   energetic: {
-    name: "High Energy",
-    icon: "fas fa-bolt",
-    color: "text-yellow-400", 
-    filters: {
-      min_energy: 0.7,
-      min_danceability: 0.6,
-      min_tempo: 120,
-      target_energy: 0.9,
-      target_danceability: 0.8
-    }
+    minEnergy: 0.7,
+    minLoudness: -7,
+    minTempo: 120
   },
   melancholic: {
-    name: "Melancholic & Sad",
-    icon: "fas fa-cloud-rain",
-    color: "text-blue-400",
-    filters: {
-      max_valence: 0.4,
-      max_energy: 0.5,
-      target_valence: 0.2,
-      target_energy: 0.3
-    }
-  },
-  angry: {
-    name: "Angry & Intense",
-    icon: "fas fa-fire",
-    color: "text-red-400",
-    filters: {
-      min_energy: 0.8,
-      max_valence: 0.3,
-      min_loudness: -8,
-      target_energy: 0.9,
-      target_valence: 0.1
-    }
+    maxValence: 0.4,
+    maxEnergy: 0.5
   },
   focus: {
-    name: "Focus & Study",
-    icon: "fas fa-brain",
-    color: "text-purple-400",
-    filters: {
-      min_instrumentalness: 0.5,
-      max_speechiness: 0.3,
-      max_energy: 0.6,
-      target_instrumentalness: 0.8,
-      target_energy: 0.4
-    }
+    minInstrumentalness: 0.5,
+    maxLoudness: -10,
+    minEnergy: 0.4,
+    maxEnergy: 0.7
   },
   party: {
-    name: "Party & Dance",
-    icon: "fas fa-party-horn",
-    color: "text-pink-400",
-    filters: {
-      min_danceability: 0.7,
-      min_energy: 0.6,
-      min_tempo: 100,
-      target_danceability: 0.9,
-      target_energy: 0.8
-    }
+    minDanceability: 0.7,
+    minEnergy: 0.7,
+    minValence: 0.5
   }
 };
+
+// Shuffle algorithm tracking variables
+let heardTrackIds = new Set(); // Track IDs that have been played in the session
+let artistPlayCount = new Map(); // Keep track of how many times an artist has been played
+let albumNameElement;
+let vinylRecord;
+let albumImageElement;
+let albumCoverElement;
 
 // Get DOM elements - REVERTED TO ORIGINAL FOR WORKING CONTROLS
 const loginButton = document.getElementById('login-btn');
@@ -847,84 +796,49 @@ async function fetchRecommendations() {
     showLoading();
     let tracks = [];
     
-    // Use the new algorithm for both modes
-    if (currentShuffleType === 'true-shuffle-library' || currentShuffleType === 'true-shuffle-all') {
-      console.log('🎯 Using Advanced True Shuffle Algorithm v2...');
+    // Use our enhanced shuffle algorithm as the default
+    tracks = await advancedTrueShuffleAlgorithm();
+    
+    // Assign tracks to shuffledTracks if we have new ones
+    if (tracks && tracks.length > 0) {
+      console.log(`✅ Loaded ${tracks.length} tracks for Enhanced True Shuffle`);
       
-      // Reset algorithm state
-      algorithmV2TrackPool = [];
-      algorithmV2HeardTrackIds = new Set();
-      algorithmV2ArtistPlayCount = new Map();
-      algorithmV2RecentArtists = [];
-      
-      // Get the track pool from the advanced algorithm
-      algorithmV2TrackPool = await advancedTrueShuffleAlgorithm();
-      
-      if (algorithmV2TrackPool && algorithmV2TrackPool.length > 0) {
-        // Start with just the first track
-        tracks = [algorithmV2TrackPool[0]];
-        console.log(`✅ Algorithm v2 initialized with first track: ${tracks[0].name}`);
+      // If we're starting fresh, replace the entire array
+      if (shuffledTracks.length === 0) {
+        shuffledTracks = [...tracks];
+        currentTrackIndex = 0;
       } else {
-        console.warn('⚠️ Algorithm v2 failed, falling back to regular shuffle...');
-        // Fallback to regular algorithms
-        switch(currentShuffleType) {
-          case 'true-shuffle-all':
-            tracks = await fetchTrueShuffleAllSpotify();
-            break;
-          case 'true-shuffle-library':
-            tracks = await fetchTrueShuffleMyLibrary();
-            break;
+        // Otherwise, append new tracks we don't already have
+        const existingIds = new Set(shuffledTracks.map(t => t.id));
+        const newTracks = tracks.filter(track => !existingIds.has(track.id));
+        
+        if (newTracks.length > 0) {
+          console.log(`✅ Adding ${newTracks.length} new tracks to the pool`);
+          shuffledTracks = [...shuffledTracks, ...newTracks];
         }
       }
-    } else {
-      // Use regular shuffle algorithms for other modes
-      switch(currentShuffleType) {
-        case 'true-shuffle-all':
-          tracks = await fetchTrueShuffleAllSpotify();
-          break;
-        case 'true-shuffle-library':
-          tracks = await fetchTrueShuffleMyLibrary();
-          break;
-        default:
-          console.warn(`⚠️ Unknown shuffle type: ${currentShuffleType}, falling back to true-shuffle-all`);
-          tracks = await fetchTrueShuffleAllSpotify();
-      }
-    }
-    
-    // Assign tracks to shuffledTracks
-    if (tracks && tracks.length > 0) {
-      console.log(`✅ Loaded ${tracks.length} tracks for ${getShuffleDisplayName(currentShuffleType)}`);
       
-      // For algorithm v2, don't shuffle - use as-is
-      if (algorithmV2TrackPool.length > 0) {
-        shuffledTracks = [...tracks]; // Just the first track initially
+      // Start playing the first track if we're not playing anything yet
+      if (currentTrackIndex === -1 && shuffledTracks.length > 0) {
         currentTrackIndex = 0;
-      } else {
-        // Apply cryptographic shuffle for regular algorithms
-        shuffledTracks = cryptographicShuffle([...tracks]);
-        currentTrackIndex = 0;
-      }
-      
-      // Start playing the first track
-      if (shuffledTracks.length > 0) {
         await playCurrentTrack();
       }
     } else {
       console.warn('⚠️ No tracks found, trying fallback...');
       // Try fallback to basic search
-      tracks = await fetchTrueShuffleAllSpotify();
+      tracks = await fetchTrulyRandomTracks();
       if (tracks && tracks.length > 0) {
-        shuffledTracks = cryptographicShuffle([...tracks]);
+        shuffledTracks = [...tracks];
         currentTrackIndex = 0;
         await playCurrentTrack();
       } else {
-        alert('Unable to load tracks. Please check your internet connection and try again.');
+        showNotification('Unable to load tracks. Please check your internet connection and try again.', 'error');
       }
     }
     
   } catch (error) {
     console.error('❌ Error in fetchRecommendations:', error);
-    alert('Failed to load tracks. Please try again.');
+    showNotification('Failed to load tracks. Please try again.', 'error');
   } finally {
     hideLoading();
   }
@@ -2245,81 +2159,40 @@ function playPreviousTrack() {
 function playNextTrack() {
   console.log('⏭️ Playing next track...');
   
-  // Add current track to heard playlist if we're moving away from it
-  if (currentTrack && currentTrack.id) {
-    addTrackToHeardPlaylist(currentTrack.id);
-  }
-  
-  // Check if we're using algorithm v2
-  if (algorithmV2TrackPool.length > 0) {
-    console.log('🎯 Using Algorithm v2 for next track selection...');
-    
-    // Use the new selection algorithm
-    selectNextTrack(algorithmV2TrackPool, algorithmV2HeardTrackIds, algorithmV2ArtistPlayCount, algorithmV2RecentArtists)
-      .then(nextTrack => {
-        if (nextTrack) {
-          // Update global state
-          currentTrack = nextTrack;
-          
-          // Update shuffledTracks to maintain compatibility with existing code
-          if (!shuffledTracks.find(t => t.id === nextTrack.id)) {
-            shuffledTracks.push(nextTrack);
-          }
-          currentTrackIndex = shuffledTracks.findIndex(t => t.id === nextTrack.id);
-          
-          console.log('🎵 Algorithm v2 selected:', nextTrack.name, 'by', nextTrack.artists[0]?.name);
-          
-          // Play the track
-          playCurrentTrack();
-        } else {
-          console.warn('⚠️ Algorithm v2 could not find next track, fetching more...');
-          // Try to grow the pool more aggressively
-          growTrackPoolV2(algorithmV2TrackPool, algorithmV2HeardTrackIds, algorithmV2ArtistPlayCount, algorithmV2RecentArtists)
-            .then(() => {
-              // Try again after growing the pool
-              if (algorithmV2TrackPool.length > 0) {
-                playNextTrack();
-              } else {
-                // Fall back to regular fetch
-                fetchRecommendations();
-              }
-            });
-        }
-      })
-      .catch(error => {
-        console.error('❌ Error in algorithm v2 track selection:', error);
-        // Fall back to regular shuffle
-        fetchRecommendations();
-      });
-    
-    return;
-  }
-  
-  // Original logic for regular shuffle modes
   if (shuffledTracks.length === 0) {
     console.log('📭 No tracks in queue, fetching new tracks...');
     fetchRecommendations();
     return;
   }
   
-  // Move to next track
-  currentTrackIndex++;
+  // Add current track to heard playlist if we're moving away from it
+  if (currentTrack && currentTrack.id) {
+    addTrackToHeardPlaylist(currentTrack.id);
+    // Add to our local set of heard tracks
+    heardTrackIds.add(currentTrack.id);
+  }
   
   // For library mode, we might need more tracks when getting low
   if (currentShuffleType === 'true-shuffle-library' && 
-      currentTrackIndex >= shuffledTracks.length - 5) {
-    console.log('⚠️ Track pool running low, will fetch more soon...');
+      shuffledTracks.length - heardTrackIds.size < 10) {
+    console.log('⚠️ Track pool running low, fetching more tracks...');
+    setTimeout(() => fetchRecommendations(), 500); // Fetch more tracks asynchronously
   }
   
-  // If we've reached the end, get more tracks
-  if (currentTrackIndex >= shuffledTracks.length) {
-    console.log('📭 Reached end of queue, getting more tracks...');
-    currentTrackIndex = 0; // Reset to start while we load new tracks
+  // Use our enhanced selection algorithm to pick the next track
+  const nextTrackIndex = selectNextTrackFromPool(shuffledTracks, currentTrackIndex, heardTrackIds, artistPlayCount);
+  
+  // If the algorithm couldn't find a suitable next track, get more tracks
+  if (nextTrackIndex < 0) {
+    console.log('📭 No suitable next track found, fetching more tracks...');
     fetchRecommendations();
     return;
   }
   
-  // Play the current track
+  // Update current track index to the selected next track
+  currentTrackIndex = nextTrackIndex;
+  
+  // Get the current track
   currentTrack = shuffledTracks[currentTrackIndex];
   console.log('🎵 Next track:', currentTrack.name, 'by', currentTrack.artists[0].name);
   
@@ -5987,21 +5860,20 @@ function cryptographicShuffle(array) {
     return shuffled;
 }
 
-// Advanced True Shuffle Algorithm v2 with enhanced personalization and randomness
+// Advanced True Shuffle Algorithm with enhanced personalization and randomness
 // Implements:
-// 1. First song from liked songs not played in over a year (or closest option)
-// 2. Dynamic pool building from liked songs, playlists, fully listened tracks, library
-// 3. Random algorithm selection for next tracks
-// 4. Random genre, popularity, year, and mood selection
-// 5. No repeats from "Heard from True Shuffle" playlist
-// 6. Max 2 songs per artist before 30 other artists
+// 1. First song prioritization from liked songs not heard in a year
+// 2. Growing song pool with various sources as the player runs
+// 3. Truly random playback with automatic continuation
+// 4. Avoiding repeats until the entire pool has been played
 async function advancedTrueShuffleAlgorithm() {
-    console.log('🎲 Starting Advanced True Shuffle Algorithm v2...');
+    console.log('🎲 Starting Enhanced True Shuffle Algorithm...');
     
-    // Use global variables instead of local ones
-    algorithmV2HeardTrackIds.clear();
-    algorithmV2ArtistPlayCount.clear();
-    algorithmV2RecentArtists.length = 0;
+    // Track IDs that have been recently heard (to avoid repeats)
+    const heardTrackIds = new Set();
+    
+    // Artist play count to avoid too many songs from the same artist
+    const artistPlayCount = new Map();
     
     // Load "Heard on True Shuffle" playlist tracks to avoid repeats
     try {
@@ -6010,7 +5882,7 @@ async function advancedTrueShuffleAlgorithm() {
             console.log(`ℹ️ Found ${heardPlaylist.tracks.items.length} tracks in "Heard on True Shuffle" playlist`);
             heardPlaylist.tracks.items.forEach(item => {
                 if (item.track && item.track.id) {
-                    algorithmV2HeardTrackIds.add(item.track.id);
+                    heardTrackIds.add(item.track.id);
                 }
             });
         }
@@ -6018,9 +5890,9 @@ async function advancedTrueShuffleAlgorithm() {
         console.error('❌ Error loading heard tracks:', error);
     }
     
-    // Step 1: Find the first song - a liked song not heard in over a year
+    // Step 1: Find the first song - a liked song not heard in at least a year
     let firstTrack = null;
-    console.log('🔍 Finding first track - liked song not played in over a year...');
+    console.log('🔍 Finding first track - liked song not heard in a year...');
     
     try {
         // Get user's saved tracks (liked songs)
@@ -6029,74 +5901,67 @@ async function advancedTrueShuffleAlgorithm() {
         if (savedTracks && savedTracks.length > 0) {
             console.log(`✅ Found ${savedTracks.length} liked songs`);
             
-            // Get user's recently played tracks and listening history
+            // Get user's listening history (last 1 year if possible)
             const oneYearAgo = new Date();
             oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
             
-            // Get recently played tracks (up to 50 - Spotify API limit)
+            // Get user's recently played tracks (up to 50 - Spotify API limit)
             const recentlyPlayedResponse = await fetch('https://api.spotify.com/v1/me/player/recently-played?limit=50', {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             
-            let recentlyPlayedIds = new Set();
             if (recentlyPlayedResponse.ok) {
                 const recentlyPlayedData = await recentlyPlayedResponse.json();
+                const recentlyPlayedIds = new Set();
+                const recentlyPlayedWithTime = new Map();
                 
+                // Extract recently played track IDs and timestamps
                 if (recentlyPlayedData.items && recentlyPlayedData.items.length > 0) {
                     recentlyPlayedData.items.forEach(item => {
                         if (item.track && item.track.id) {
                             recentlyPlayedIds.add(item.track.id);
+                            recentlyPlayedWithTime.set(item.track.id, new Date(item.played_at));
                         }
                     });
                     console.log(`ℹ️ Found ${recentlyPlayedIds.size} recently played tracks`);
                 }
-            }
-            
-            // Get user's top tracks to also avoid very recently popular ones
-            let topTrackIds = new Set();
-            try {
-                const topTracks = await fetchUserTopTracks(new Set());
-                if (topTracks && topTracks.length > 0) {
-                    topTracks.slice(0, 20).forEach(track => {
-                        if (track.id) topTrackIds.add(track.id);
-                    });
-                    console.log(`ℹ️ Found ${topTrackIds.size} top tracks to deprioritize`);
-                }
-            } catch (error) {
-                console.warn('⚠️ Could not fetch top tracks:', error);
-            }
-            
-            // Filter liked songs by priority:
-            // 1. Not in "Heard from True Shuffle"
-            // 2. Not recently played
-            // 3. Not in top tracks (to find hidden gems)
-            const candidateTracks = savedTracks.filter(track => 
-                !algorithmV2HeardTrackIds.has(track.id) && 
-                !recentlyPlayedIds.has(track.id)
-            );
-            
-            const hiddenGems = candidateTracks.filter(track => !topTrackIds.has(track.id));
-            
-            // Prefer hidden gems, but fall back to any candidate track
-            const finalCandidates = hiddenGems.length > 0 ? hiddenGems : candidateTracks;
-            
-            if (finalCandidates.length > 0) {
-                // Use cryptographically secure randomness for selection
-                const randomIndex = Math.floor(cryptoRandom() * finalCandidates.length);
-                firstTrack = finalCandidates[randomIndex];
-                console.log('✅ Selected first track (not heard in a while):', firstTrack.name, 'by', firstTrack.artists[0]?.name);
-            } else {
-                console.log('⚠️ No unheard liked songs found, using random liked song');
-                // Fallback: random liked song not in heard playlist
-                const notHeardTracks = savedTracks.filter(track => !algorithmV2HeardTrackIds.has(track.id));
-                if (notHeardTracks.length > 0) {
-                    const randomIndex = Math.floor(cryptoRandom() * notHeardTracks.length);
-                    firstTrack = notHeardTracks[randomIndex];
+                
+                // Find liked songs not played in over a year
+                const notPlayedInAYear = savedTracks.filter(track => {
+                    const lastPlayed = recentlyPlayedWithTime.get(track.id);
+                    return !lastPlayed || lastPlayed < oneYearAgo;
+                });
+                
+                if (notPlayedInAYear.length > 0) {
+                    // Use cryptographically secure randomness for selection
+                    const randomIndex = Math.floor(cryptoRandom() * notPlayedInAYear.length);
+                    firstTrack = notPlayedInAYear[randomIndex];
+                    console.log('✅ Selected first track not played in a year:', firstTrack.name);
                 } else {
-                    // Last resort: any liked song
-                    const randomIndex = Math.floor(cryptoRandom() * savedTracks.length);
-                    firstTrack = savedTracks[randomIndex];
+                    // Filter liked songs that haven't been played recently
+                    const notRecentlyPlayedTracks = savedTracks.filter(track => 
+                        !recentlyPlayedIds.has(track.id) && !heardTrackIds.has(track.id)
+                    );
+                    
+                    if (notRecentlyPlayedTracks.length > 0) {
+                        // Use cryptographically secure randomness for selection
+                        const randomIndex = Math.floor(cryptoRandom() * notRecentlyPlayedTracks.length);
+                        firstTrack = notRecentlyPlayedTracks[randomIndex];
+                        console.log('✅ Selected first track not in recent history:', firstTrack.name);
+                    } else {
+                        console.log('⚠️ No liked songs that haven\'t been heard recently, using fallback');
+                        // Fallback: random liked song
+                        const randomIndex = Math.floor(cryptoRandom() * savedTracks.length);
+                        firstTrack = savedTracks[randomIndex];
+                        console.log('✅ Selected random liked song as fallback:', firstTrack.name);
+                    }
                 }
+            } else {
+                console.warn('⚠️ Unable to fetch recently played tracks, using random liked song');
+                // Fallback to random liked song
+                const randomIndex = Math.floor(cryptoRandom() * savedTracks.length);
+                firstTrack = savedTracks[randomIndex];
+                console.log('✅ Selected random liked song (API limitation):', firstTrack.name);
             }
         } else {
             console.warn('⚠️ No liked songs found, will use fallback for first track');
@@ -6120,62 +5985,51 @@ async function advancedTrueShuffleAlgorithm() {
         }
     }
     
-    // Step 2: Build initial track pool and start the algorithm
+    // Step 2: Build initial track pool
     console.log('🔄 Building initial track pool...');
     let trackPool = [];
     
     // If we have a first track, add it to the beginning of our pool
     if (firstTrack) {
         trackPool.push(firstTrack);
-        // Mark as heard to avoid repeats
-        algorithmV2HeardTrackIds.add(firstTrack.id);
-        // Track artist for diversity
-        const artistName = firstTrack.artists[0]?.name;
-        if (artistName) {
-            algorithmV2ArtistPlayCount.set(artistName, 1);
-            algorithmV2RecentArtists.push(artistName);
+        // Track the artist to avoid excessive repetition
+        if (firstTrack.artists && firstTrack.artists.length > 0) {
+            firstTrack.artists.forEach(artist => {
+                artistPlayCount.set(artist.id, (artistPlayCount.get(artist.id) || 0) + 1);
+            });
         }
+        // Mark as heard to avoid repeats
+        heardTrackIds.add(firstTrack.id);
     }
     
     // Start gathering tracks from various sources asynchronously
     // This will continue to run in the background while the first song plays
     setTimeout(async () => {
-        await growTrackPoolV2(trackPool, algorithmV2HeardTrackIds, algorithmV2ArtistPlayCount, algorithmV2RecentArtists);
+        await growTrackPool(trackPool, heardTrackIds, artistPlayCount);
     }, 100);
     
     // Return the track pool (which will start with just the first track)
     return trackPool;
 }
 
-// Helper function to continuously grow the track pool while songs are playing (v2)
-async function growTrackPoolV2(trackPool, heardTrackIds, artistPlayCount, recentArtists) {
-    console.log('🌱 Starting to grow track pool v2 in background...');
+// Helper function to continuously grow the track pool while songs are playing
+async function growTrackPool(trackPool, heardTrackIds, artistPlayCount) {
+    console.log('🌱 Starting to grow track pool in background...');
     
-    // Track sources based on user's personal music
+    // Sources to gather tracks from
     const trackSources = [
-        { 
-            name: 'User Liked Songs', 
-            fn: fetchUserSavedTracks,
-            weight: 40 // 40% of tracks from liked songs
-        },
-        { 
-            name: 'User Playlists', 
-            fn: () => fetchUserPlaylistTracks(heardTrackIds, 100),
-            weight: 30 // 30% from playlists
-        },
-        { 
-            name: 'User Top Tracks', 
-            fn: () => fetchUserTopTracks(heardTrackIds),
-            weight: 15 // 15% from top tracks
-        },
-        { 
-            name: 'User Library Albums', 
-            fn: () => fetchUserLibraryTracks(heardTrackIds),
-            weight: 15 // 15% from saved albums
-        }
+        { name: 'User Saved Tracks', fn: fetchUserSavedTracks, weight: 25 },
+        { name: 'User Playlists', fn: () => fetchUserPlaylistTracks(heardTrackIds, 50), weight: 20 },
+        { name: 'User Top Tracks', fn: () => fetchUserTopTracks(heardTrackIds), weight: 15 },
+        { name: 'Random Recommendations', fn: () => fetchRandomRecommendations({
+            genres: ['pop', 'rock', 'hip-hop', 'electronic', 'jazz', 'indie'],
+            popularity: 70
+        }), weight: 15 },
+        { name: 'Genre-balanced Tracks', fn: fetchGenreBalancedTracks, weight: 15 },
+        { name: 'Random Album Tracks', fn: () => fetchRandomAlbumTracks({}, heardTrackIds), weight: 10 }
     ];
     
-    // Process each source and build weighted pool
+    // Process each source with a delay between them to avoid API rate limits
     for (const source of trackSources) {
         try {
             console.log(`🔍 Fetching tracks from: ${source.name}...`);
@@ -6190,18 +6044,15 @@ async function growTrackPoolV2(trackPool, heardTrackIds, artistPlayCount, recent
                 );
                 
                 if (newTracks.length > 0) {
-                    // Calculate how many tracks to take based on weight
-                    const targetCount = Math.floor((source.weight / 100) * 200); // Target pool size of 200
-                    const tracksToAdd = newTracks.slice(0, Math.min(targetCount, newTracks.length));
-                    
-                    console.log(`✅ Adding ${tracksToAdd.length} tracks from ${source.name}`);
+                    console.log(`✅ Adding ${newTracks.length} tracks from ${source.name}`);
                     
                     // Shuffle the new tracks before adding them
-                    const shuffledNewTracks = cryptographicShuffle(tracksToAdd);
+                    const shuffledNewTracks = cryptographicShuffle(newTracks);
                     
                     // Add to pool
                     trackPool.push(...shuffledNewTracks);
                     
+                    // Update UI if needed
                     console.log(`🎵 Track pool now has ${trackPool.length} tracks`);
                 }
             }
@@ -6214,239 +6065,315 @@ async function growTrackPoolV2(trackPool, heardTrackIds, artistPlayCount, recent
         }
     }
     
-    console.log('✅ Finished initial track pool growth');
-    console.log(`🎵 Final pool size: ${trackPool.length} tracks`);
-}
-
-// New function to fetch user's library tracks (saved albums)
-async function fetchUserLibraryTracks(usedTrackIds) {
-    console.log('📚 Fetching user library tracks...');
+    console.log('✅ Finished initial track pool growth, continuing in background...');
     
-    try {
-        const tracks = [];
-        let offset = 0;
-        const limit = 50;
-        
-        while (tracks.length < 100 && offset < 500) { // Limit to prevent too many API calls
-            const response = await fetch(`https://api.spotify.com/v1/me/albums?limit=${limit}&offset=${offset}`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            
-            if (!response.ok) {
-                console.error('❌ Failed to fetch user albums:', response.status);
-                break;
-            }
-            
-            const data = await response.json();
-            
-            if (!data.items || data.items.length === 0) {
-                break;
-            }
-            
-            // Extract tracks from albums
-            for (const albumItem of data.items) {
-                const album = albumItem.album;
-                if (album && album.tracks && album.tracks.items) {
-                    const albumTracks = album.tracks.items
-                        .filter(track => track && track.id && !usedTrackIds?.has(track.id))
-                        .map(track => ({
-                            ...track,
-                            album: {
-                                id: album.id,
-                                name: album.name,
-                                images: album.images
-                            }
-                        }));
-                    
-                    tracks.push(...albumTracks);
-                }
-            }
-            
-            offset += limit;
-            
-            // Break if no more items
-            if (!data.next) {
-                break;
-            }
-        }
-        
-        console.log(`📚 Found ${tracks.length} tracks from user's saved albums`);
-        return tracks;
-        
-    } catch (error) {
-        console.error('❌ Error fetching user library tracks:', error);
-        return [];
-    }
+    // Continue growing the pool periodically
+    setTimeout(async () => {
+        await growTrackPool(trackPool, heardTrackIds, artistPlayCount);
+    }, 60000); // Check for new tracks every minute
 }
 
-// Enhanced next track selection with randomized criteria
-async function selectNextTrack(trackPool, heardTrackIds, artistPlayCount, recentArtists) {
+// Select the next track from the pool using our advanced algorithm
+function selectNextTrackFromPool(trackPool, currentTrackIndex, heardTrackIds, artistPlayCount) {
+    console.log('🎲 Selecting next track using enhanced algorithm...');
+    
     if (!trackPool || trackPool.length === 0) {
-        console.warn('⚠️ Track pool is empty');
-        return null;
+        console.warn('⚠️ Empty track pool, cannot select next track');
+        return -1; // Signal that we need to fetch more tracks
     }
     
-    // Filter available tracks (not heard, artist diversity rules)
-    let availableTracks = trackPool.filter(track => {
-        if (!track || !track.id || heardTrackIds.has(track.id)) {
-            return false;
-        }
-        
-        const artistName = track.artists[0]?.name;
-        if (!artistName) return true;
-        
-        // Check artist diversity rule: max 2 songs per artist before 30 others
-        const artistCount = artistPlayCount.get(artistName) || 0;
-        if (artistCount >= 2) {
-            // Count how many different artists have played since this artist
-            const artistIndex = recentArtists.lastIndexOf(artistName);
-            if (artistIndex !== -1) {
-                const artistsSince = new Set(recentArtists.slice(artistIndex + 1));
-                if (artistsSince.size < 30) {
-                    return false; // Skip this artist
+    // Get all available tracks we haven't played yet
+    const availableTracks = trackPool.filter((track, index) => 
+        index !== currentTrackIndex && 
+        !heardTrackIds.has(track.id)
+    );
+    
+    if (availableTracks.length === 0) {
+        console.warn('⚠️ No available tracks left in pool');
+        return -1; // Signal that we need to fetch more tracks
+    }
+    
+    // Selection strategies with weights
+    const selectionStrategies = [
+        { 
+            name: 'Genre-based',
+            weight: 20,
+            select: () => {
+                // Try to find a track with similar or completely different genre
+                const currentTrack = trackPool[currentTrackIndex];
+                if (!currentTrack || !currentTrack.artists) return null;
+                
+                // Randomly decide whether to match genre or switch genre
+                const matchGenre = Math.random() > 0.5;
+                
+                // Get current track genre
+                let currentGenre = 'unknown';
+                if (currentTrack.genres && currentTrack.genres.length > 0) {
+                    currentGenre = currentTrack.genres[0];
                 }
+                
+                // Filter by genre matching/switching strategy
+                const genreFiltered = availableTracks.filter(track => {
+                    if (!track.genres || track.genres.length === 0) return false;
+                    
+                    const hasMatchingGenre = track.genres.some(g => 
+                        currentTrack.genres.some(cg => g.toLowerCase().includes(cg.toLowerCase()))
+                    );
+                    
+                    return matchGenre ? hasMatchingGenre : !hasMatchingGenre;
+                });
+                
+                if (genreFiltered.length > 0) {
+                    const selectedTrack = genreFiltered[Math.floor(cryptoRandom() * genreFiltered.length)];
+                    return trackPool.findIndex(t => t.id === selectedTrack.id);
+                }
+                
+                return null;
+            }
+        },
+        { 
+            name: 'Mood-based',
+            weight: 20,
+            select: () => {
+                // Try to find a track with similar or contrasting mood
+                const currentTrack = trackPool[currentTrackIndex];
+                if (!currentTrack) return null;
+                
+                // We'd need audio features for proper mood detection
+                // For now, approximate using track metadata
+                const tempoMatch = availableTracks.filter(track => {
+                    // Some basic heuristics based on name/artist/album
+                    if (!track.name || !currentTrack.name) return false;
+                    
+                    // Simple word analysis for mood indicators
+                    const happyWords = ['happy', 'joy', 'dance', 'party', 'fun', 'light'];
+                    const sadWords = ['sad', 'blue', 'alone', 'dark', 'cry', 'tears'];
+                    
+                    const currentTrackName = currentTrack.name.toLowerCase();
+                    const trackName = track.name.toLowerCase();
+                    
+                    const currentHappy = happyWords.some(word => currentTrackName.includes(word));
+                    const currentSad = sadWords.some(word => currentTrackName.includes(word));
+                    const trackHappy = happyWords.some(word => trackName.includes(word));
+                    const trackSad = sadWords.some(word => trackName.includes(word));
+                    
+                    // Random decision to match or contrast mood
+                    const matchMood = Math.random() > 0.5;
+                    
+                    if (currentHappy && trackHappy) return matchMood;
+                    if (currentSad && trackSad) return matchMood;
+                    if (currentHappy && trackSad) return !matchMood;
+                    if (currentSad && trackHappy) return !matchMood;
+                    
+                    return false;
+                });
+                
+                if (tempoMatch.length > 0) {
+                    const selectedTrack = tempoMatch[Math.floor(cryptoRandom() * tempoMatch.length)];
+                    return trackPool.findIndex(t => t.id === selectedTrack.id);
+                }
+                
+                return null;
+            }
+        },
+        { 
+            name: 'Popularity-based',
+            weight: 15,
+            select: () => {
+                // Select based on popularity - either similar or contrasting
+                const currentTrack = trackPool[currentTrackIndex];
+                if (!currentTrack || typeof currentTrack.popularity !== 'number') return null;
+                
+                // Randomly decide whether to match popularity or switch
+                const matchPopularity = Math.random() > 0.5;
+                
+                // Define popularity ranges
+                const currentPopularity = currentTrack.popularity;
+                const popularityThreshold = 15; // How close should popularity be to match
+                
+                // Filter by popularity matching/switching strategy
+                const popularityFiltered = availableTracks.filter(track => {
+                    if (typeof track.popularity !== 'number') return false;
+                    
+                    const popularityDifference = Math.abs(track.popularity - currentPopularity);
+                    
+                    return matchPopularity 
+                        ? popularityDifference <= popularityThreshold  // Similar popularity
+                        : popularityDifference >= 40;                  // Contrasting popularity
+                });
+                
+                if (popularityFiltered.length > 0) {
+                    const selectedTrack = popularityFiltered[Math.floor(cryptoRandom() * popularityFiltered.length)];
+                    return trackPool.findIndex(t => t.id === selectedTrack.id);
+                }
+                
+                return null;
+            }
+        },
+        { 
+            name: 'Year-based',
+            weight: 15,
+            select: () => {
+                // Select based on release year - either from same era or different era
+                const currentTrack = trackPool[currentTrackIndex];
+                if (!currentTrack || !currentTrack.album || !currentTrack.album.release_date) return null;
+                
+                // Get current track release year
+                const currentReleaseYear = parseInt(currentTrack.album.release_date.substring(0, 4));
+                if (isNaN(currentReleaseYear)) return null;
+                
+                // Randomly decide whether to match era or switch era
+                const matchEra = Math.random() > 0.5;
+                
+                // Define era as 10-year span
+                const eraSpan = 10;
+                const currentEraStart = Math.floor(currentReleaseYear / eraSpan) * eraSpan;
+                const currentEraEnd = currentEraStart + eraSpan;
+                
+                // Filter by era matching/switching strategy
+                const yearFiltered = availableTracks.filter(track => {
+                    if (!track.album || !track.album.release_date) return false;
+                    
+                    const trackReleaseYear = parseInt(track.album.release_date.substring(0, 4));
+                    if (isNaN(trackReleaseYear)) return false;
+                    
+                    const inSameEra = trackReleaseYear >= currentEraStart && trackReleaseYear < currentEraEnd;
+                    
+                    return matchEra ? inSameEra : !inSameEra;
+                });
+                
+                if (yearFiltered.length > 0) {
+                    const selectedTrack = yearFiltered[Math.floor(cryptoRandom() * yearFiltered.length)];
+                    return trackPool.findIndex(t => t.id === selectedTrack.id);
+                }
+                
+                return null;
+            }
+        },
+        { 
+            name: 'Artist-variety',
+            weight: 20,
+            select: () => {
+                // Avoid playing too many songs by the same artist
+                const currentTrack = trackPool[currentTrackIndex];
+                if (!currentTrack || !currentTrack.artists || !currentTrack.artists.length) return null;
+                
+                // Get artists that have been played less than 2 times
+                const lowPlayCountArtistTracks = availableTracks.filter(track => {
+                    if (!track.artists || !track.artists.length) return false;
+                    
+                    // Check if any of the track's artists have been played too many times
+                    return track.artists.every(artist => {
+                        const playCount = artistPlayCount.get(artist.id) || 0;
+                        return playCount < 2; // Less than 2 plays from this artist
+                    });
+                });
+                
+                if (lowPlayCountArtistTracks.length > 0) {
+                    const selectedTrack = lowPlayCountArtistTracks[Math.floor(cryptoRandom() * lowPlayCountArtistTracks.length)];
+                    return trackPool.findIndex(t => t.id === selectedTrack.id);
+                }
+                
+                return null;
+            }
+        },
+        { 
+            name: 'Pure-random',
+            weight: 10,
+            select: () => {
+                // Completely random selection
+                const randomIndex = Math.floor(cryptoRandom() * availableTracks.length);
+                const randomTrack = availableTracks[randomIndex];
+                return trackPool.findIndex(t => t.id === randomTrack.id);
             }
         }
-        
-        return true;
-    });
-    
-    if (availableTracks.length === 0) {
-        console.warn('⚠️ No available tracks after filtering, relaxing artist rules');
-        // Relax rules if no tracks available
-        availableTracks = trackPool.filter(track => 
-            track && track.id && !heardTrackIds.has(track.id)
-        );
-    }
-    
-    if (availableTracks.length === 0) {
-        console.warn('⚠️ Still no available tracks');
-        return null;
-    }
-    
-    // Randomized selection criteria (pick one at random)
-    const selectionMethods = [
-        { name: 'Random Genre', fn: selectByRandomGenre },
-        { name: 'Random Popularity', fn: selectByRandomPopularity },
-        { name: 'Random Year', fn: selectByRandomYear },
-        { name: 'Random Mood', fn: selectByRandomMood },
-        { name: 'Pure Random', fn: selectPureRandom }
     ];
     
-    // Randomly choose selection method
-    const methodIndex = Math.floor(cryptoRandom() * selectionMethods.length);
-    const selectedMethod = selectionMethods[methodIndex];
+    // Calculate total weight
+    const totalWeight = selectionStrategies.reduce((sum, strategy) => sum + strategy.weight, 0);
     
-    console.log(`🎲 Using selection method: ${selectedMethod.name}`);
+    // Try strategies in random weighted order
+    let randomValue = cryptoRandom() * totalWeight;
+    let cumulativeWeight = 0;
     
-    const selectedTrack = selectedMethod.fn(availableTracks);
-    
-    if (selectedTrack) {
-        // Update tracking
-        heardTrackIds.add(selectedTrack.id);
-        const artistName = selectedTrack.artists[0]?.name;
-        if (artistName) {
-            artistPlayCount.set(artistName, (artistPlayCount.get(artistName) || 0) + 1);
-            recentArtists.push(artistName);
-            
-            // Keep recent artists list manageable
-            if (recentArtists.length > 100) {
-                recentArtists.splice(0, 50); // Remove oldest 50
-            }
-        }
+    for (const strategy of selectionStrategies) {
+        cumulativeWeight += strategy.weight;
         
-        console.log(`✅ Selected: ${selectedTrack.name} by ${artistName} (${selectedMethod.name})`);
+        if (randomValue <= cumulativeWeight) {
+            console.log(`🎯 Trying selection strategy: ${strategy.name}`);
+            const selectedIndex = strategy.select();
+            
+            if (selectedIndex !== null && selectedIndex >= 0) {
+                console.log(`✅ Selected track using ${strategy.name} strategy`);
+                
+                // Get the selected track
+                const selectedTrack = trackPool[selectedIndex];
+                
+                // Update artist play count for the selected track
+                if (selectedTrack.artists && selectedTrack.artists.length > 0) {
+                    selectedTrack.artists.forEach(artist => {
+                        artistPlayCount.set(artist.id, (artistPlayCount.get(artist.id) || 0) + 1);
+                    });
+                }
+                
+                return selectedIndex;
+            }
+            
+            // If this strategy didn't work, try pure random as fallback
+            break;
+        }
     }
     
-    return selectedTrack;
+    // Fallback to pure random if no strategy worked
+    console.log('⚠️ All weighted strategies failed, using pure random selection');
+    const randomIndex = Math.floor(cryptoRandom() * availableTracks.length);
+    const randomTrack = availableTracks[randomIndex];
+    const selectedIndex = trackPool.findIndex(t => t.id === randomTrack.id);
+    
+    // Update artist play count for the random track
+    if (randomTrack.artists && randomTrack.artists.length > 0) {
+        randomTrack.artists.forEach(artist => {
+            artistPlayCount.set(artist.id, (artistPlayCount.get(artist.id) || 0) + 1);
+        });
+    }
+    
+    return selectedIndex;
 }
 
-// Selection methods for different criteria
-function selectByRandomGenre(tracks) {
-    // Group by genre
-    const genreGroups = {};
-    tracks.forEach(track => {
-        const genre = track.genres?.[0] || track.album?.genres?.[0] || 'unknown';
-        if (!genreGroups[genre]) genreGroups[genre] = [];
-        genreGroups[genre].push(track);
-    });
+// Enable crossfade between tracks
+function enableCrossfade() {
+    console.log('🎵 Enabling crossfade between tracks...');
     
-    // Pick random genre
-    const genres = Object.keys(genreGroups);
-    if (genres.length === 0) return selectPureRandom(tracks);
+    // Check if we have a valid Spotify player
+    if (!spotifyPlayer) {
+        console.warn('⚠️ Cannot enable crossfade: Spotify player not initialized');
+        return;
+    }
     
-    const randomGenre = genres[Math.floor(cryptoRandom() * genres.length)];
-    const genreTracks = genreGroups[randomGenre];
-    
-    return genreTracks[Math.floor(cryptoRandom() * genreTracks.length)];
+    try {
+        // Set up crossfade using Spotify API (requires premium)
+        fetch('https://api.spotify.com/v1/me/player/crossfade', {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                state: true,
+                duration_ms: 2000 // 2-second crossfade
+            })
+        }).then(response => {
+            if (response.ok) {
+                console.log('✅ Crossfade enabled successfully');
+            } else {
+                console.warn(`⚠️ Failed to enable crossfade: ${response.status} ${response.statusText}`);
+                // This likely failed because user doesn't have premium or the API doesn't support it
+                // We'll implement our own crossfade later
+            }
+        }).catch(error => {
+            console.error('❌ Error enabling crossfade:', error);
+        });
+    } catch (error) {
+        console.error('❌ Error in enableCrossfade:', error);
+    }
 }
-
-function selectByRandomPopularity(tracks) {
-    // Group by popularity ranges
-    const popularityGroups = {
-        low: tracks.filter(t => (t.popularity || 0) < 30),
-        medium: tracks.filter(t => (t.popularity || 0) >= 30 && (t.popularity || 0) < 70),
-        high: tracks.filter(t => (t.popularity || 0) >= 70)
-    };
-    
-    // Pick random popularity range
-    const ranges = Object.keys(popularityGroups).filter(range => popularityGroups[range].length > 0);
-    if (ranges.length === 0) return selectPureRandom(tracks);
-    
-    const randomRange = ranges[Math.floor(cryptoRandom() * ranges.length)];
-    const rangeTracks = popularityGroups[randomRange];
-    
-    return rangeTracks[Math.floor(cryptoRandom() * rangeTracks.length)];
-}
-
-function selectByRandomYear(tracks) {
-    // Group by decade
-    const currentYear = new Date().getFullYear();
-    const yearGroups = {};
-    
-    tracks.forEach(track => {
-        let year = currentYear;
-        if (track.album?.release_date) {
-            year = parseInt(track.album.release_date.split('-')[0]);
-        }
-        
-        const decade = Math.floor(year / 10) * 10;
-        if (!yearGroups[decade]) yearGroups[decade] = [];
-        yearGroups[decade].push(track);
-    });
-    
-    // Pick random decade
-    const decades = Object.keys(yearGroups);
-    if (decades.length === 0) return selectPureRandom(tracks);
-    
-    const randomDecade = decades[Math.floor(cryptoRandom() * decades.length)];
-    const decadeTracks = yearGroups[randomDecade];
-    
-    return decadeTracks[Math.floor(cryptoRandom() * decadeTracks.length)];
-}
-
-function selectByRandomMood(tracks) {
-    // This would require audio features analysis
-    // For now, use track duration as a proxy for mood
-    const moodGroups = {
-        short: tracks.filter(t => (t.duration_ms || 0) < 180000), // < 3 min
-        medium: tracks.filter(t => (t.duration_ms || 0) >= 180000 && (t.duration_ms || 0) < 300000), // 3-5 min
-        long: tracks.filter(t => (t.duration_ms || 0) >= 300000) // > 5 min
-    };
-    
-    // Pick random mood/duration range
-    const moods = Object.keys(moodGroups).filter(mood => moodGroups[mood].length > 0);
-    if (moods.length === 0) return selectPureRandom(tracks);
-    
-    const randomMood = moods[Math.floor(cryptoRandom() * moods.length)];
-    const moodTracks = moodGroups[randomMood];
-    
-    return moodTracks[Math.floor(cryptoRandom() * moodTracks.length)];
-}
-
-function selectPureRandom(tracks) {
-    return tracks[Math.floor(cryptoRandom() * tracks.length)];
-}
-
-// ... existing code ...
-// Best Practice: Use Spotify's recommendation engine for true randomness
