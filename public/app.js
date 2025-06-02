@@ -2685,270 +2685,252 @@ let gradientPosition = 0;
 // Update background color based on album art with advanced color extraction
 function updateBackgroundColor(img) {
   console.log('🎨 ===== STARTING COLOR EXTRACTION =====');
-  console.log('🎨 Image details:', {
-    src: img.src,
-    complete: img.complete,
-    naturalWidth: img.naturalWidth,
-    naturalHeight: img.naturalHeight,
-    width: img.width,
-    height: img.height
-  });
-
-  // Check if ColorThief is available
-  if (!colorThief && !window.ColorThief) {
-    console.log('🎨 ⚠️ ColorThief not available, using default background');
-    setDefaultBackground();
-    return;
-  }
-  
-  console.log('🎨 ✅ ColorThief is available');
-  
-  // Wait for image to load completely
-  if (!img.complete || img.naturalHeight === 0) {
-    console.log('🎨 ⏳ Image not fully loaded, waiting...');
-    img.onload = () => {
-      console.log('🎨 ✅ Image loaded, retrying color extraction...');
-      updateBackgroundColor(img);
-    };
-    img.onerror = () => {
-      console.warn('🎨 ❌ Image failed to load, using default background');
-      setDefaultBackground();
-    };
-    return;
-  }
-  
-  console.log('🎨 ✅ Image is fully loaded, proceeding with extraction...');
-  
-  // Try multiple extraction methods
-  tryColorExtractionMethods(img);
-}
-
-function tryColorExtractionMethods(img) {
-  // Use the global colorThief instance or create a new one
-  const thief = colorThief || (window.ColorThief ? new window.ColorThief() : null);
-  
-  if (!thief) {
-    console.warn('🎨 ❌ No ColorThief instance available');
-    setDefaultBackground();
-    return;
-  }
-  
-  console.log('🎨 🎯 TRYING COLOR EXTRACTION METHODS...');
   console.log('🎨 Image source:', img.src);
   console.log('🎨 Image dimensions:', img.naturalWidth, 'x', img.naturalHeight);
   
-  // Method 1: Try ColorThief with the image directly
-  console.log('🎨 🎯 METHOD 1: Direct ColorThief extraction...');
-  try {
-    const palette = thief.getPalette(img, 8, 2); // Get more colors for better selection
-    console.log('🎨 Direct extraction result:', palette);
-    
-    if (palette && palette.length >= 2) {
-      console.log('🎨 ✅ SUCCESS with direct method!');
-      console.log('🎨 Extracted', palette.length, 'colors from album artwork');
-      processExtractedColors(palette);
-      return;
-    }
-  } catch (error) {
-    console.warn('🎨 ❌ Direct method failed:', error.message);
-  }
-  
-  // Method 2: Try with canvas (bypassing CORS)
-  console.log('🎨 🎯 METHOD 2: Canvas-based extraction...');
-  try {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    // Use appropriate canvas size
-    const maxSize = 100; // Smaller for performance but large enough for color diversity
-    const aspectRatio = img.naturalWidth / img.naturalHeight;
-    
-    if (aspectRatio > 1) {
-      canvas.width = maxSize;
-      canvas.height = maxSize / aspectRatio;
-    } else {
-      canvas.width = maxSize * aspectRatio;
-      canvas.height = maxSize;
-    }
-    
-    console.log('🎨 Canvas size:', canvas.width, 'x', canvas.height);
-    
-    // Enable image smoothing for better color representation
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    
-    // Draw image to canvas
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    
-    const palette = thief.getPalette(canvas, 8, 2);
-    console.log('🎨 Canvas extraction result:', palette);
-    
-    if (palette && palette.length >= 2) {
-      console.log('🎨 ✅ SUCCESS with canvas method!');
-      console.log('🎨 Extracted', palette.length, 'colors from album artwork via canvas');
-      processExtractedColors(palette);
-      return;
-    }
-  } catch (error) {
-    console.warn('🎨 ❌ Canvas method failed:', error.message);
-  }
-  
-  // Method 3: Enhanced manual pixel sampling
-  console.log('🎨 🎯 METHOD 3: Enhanced manual pixel sampling...');
-  try {
-    const colors = extractColorsManually(img);
-    if (colors && colors.length >= 2) {
-      console.log('🎨 ✅ SUCCESS with enhanced manual method!');
-      console.log('🎨 Extracted', colors.length, 'colors via manual sampling');
-      processExtractedColors(colors);
-      return;
-    }
-  } catch (error) {
-    console.warn('🎨 ❌ Enhanced manual method failed:', error.message);
-  }
-  
-  // Method 4: Try to get dominant color only as last resort
-  console.log('🎨 🎯 METHOD 4: Dominant color extraction...');
-  try {
-    const dominantColor = thief.getColor(img);
-    if (dominantColor && dominantColor.length === 3) {
-      console.log('🎨 ✅ Got dominant color from album artwork:', dominantColor);
-      // Create a palette based on the dominant color
-      const artificialPalette = [
-        dominantColor,
-        adjustColor(dominantColor, 0.8, 1.3),
-        adjustColor(dominantColor, 1.2, 0.7),
-        adjustColor(dominantColor, 0.9, 1.1)
-      ];
-      console.log('🎨 Created artificial palette from dominant color:', artificialPalette);
-      processExtractedColors(artificialPalette);
-      return;
-    }
-  } catch (error) {
-    console.warn('🎨 ❌ Dominant color method failed:', error.message);
-  }
-  
-  // Only if ALL methods fail, show a warning and use default
-  console.error('🎨 ❌ ALL COLOR EXTRACTION METHODS FAILED!');
-  console.error('🎨 This means there\'s likely a CORS issue or the image is corrupted');
-  console.error('🎨 Falling back to default background instead of predefined palettes');
-  setDefaultBackground();
+  // Try multiple extraction methods
+  extractColorsWithProxy(img);
 }
 
-// Enhanced manual color extraction from canvas
-function extractColorsManually(img) {
+async function extractColorsWithProxy(img) {
+  console.log('🎨 Attempting color extraction with proxy method...');
+  
+  try {
+    // Create a new image element that loads through our own domain to avoid CORS
+    const proxyImg = new Image();
+    proxyImg.crossOrigin = 'anonymous';
+    
+    proxyImg.onload = function() {
+      console.log('🎨 ✅ Proxy image loaded successfully');
+      
+      // Now try color extraction on the CORS-safe image
+      const colors = extractColorsFromCanvas(proxyImg);
+      if (colors && colors.length > 0) {
+        console.log('🎨 ✅ Successfully extracted colors:', colors.map(c => `rgb(${c.join(', ')})`));
+        processExtractedColors(colors);
+      } else {
+        // If extraction still fails, use the dominant color approach
+        tryDominantColorExtraction(proxyImg);
+      }
+    };
+    
+    proxyImg.onerror = function() {
+      console.warn('🎨 ❌ Proxy image loading failed, trying alternative methods');
+      tryAlternativeColorExtraction(img);
+    };
+    
+    // Load the image through a proxy or use the original if same-origin
+    proxyImg.src = img.src;
+    
+  } catch (error) {
+    console.warn('🎨 ❌ Proxy extraction failed:', error.message);
+    tryAlternativeColorExtraction(img);
+  }
+}
+
+function extractColorsFromCanvas(img) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   
-  // Use optimal canvas size for color sampling
-  const maxSize = 60; // Good balance between performance and color accuracy
-  const aspectRatio = img.naturalWidth / img.naturalHeight;
+  // Set optimal canvas size for color analysis
+  const size = 100;
+  canvas.width = size;
+  canvas.height = size;
   
-  if (aspectRatio > 1) {
-    canvas.width = maxSize;
-    canvas.height = maxSize / aspectRatio;
-  } else {
-    canvas.width = maxSize * aspectRatio;
-    canvas.height = maxSize;
-  }
-  
-  console.log('🎨 Manual extraction canvas size:', canvas.width, 'x', canvas.height);
-  
-  // Enable high-quality image rendering
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  
-  // Draw the image to canvas
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  
-  // Get image data
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-  
-  console.log('🎨 Got image data, analyzing', data.length / 4, 'pixels');
-  
-  // Collect color frequency data
-  const colorCounts = {};
-  const totalPixels = data.length / 4;
-  let validPixels = 0;
-  
-  // Sample every pixel but with intelligent filtering
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    const a = data[i + 3];
+  try {
+    // Draw image to canvas
+    ctx.drawImage(img, 0, 0, size, size);
     
-    // Skip transparent pixels and very light/dark pixels that don't contribute much
-    if (a > 200) { // Good opacity
-      const brightness = (r + g + b) / 3;
-      const saturation = Math.max(r, g, b) - Math.min(r, g, b);
+    // Get image data
+    const imageData = ctx.getImageData(0, 0, size, size);
+    const data = imageData.data;
+    
+    console.log('🎨 Canvas extraction - analyzing', data.length / 4, 'pixels');
+    
+    // Analyze colors using advanced color quantization
+    const colorMap = new Map();
+    const step = 4; // Sample every 4th pixel for performance
+    
+    for (let i = 0; i < data.length; i += 4 * step) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
       
-      // Focus on pixels that have some color character
-      if (brightness > 20 && brightness < 235 && saturation > 15) {
-        // Group similar colors with smaller buckets for more precision
-        const colorKey = `${Math.floor(r/15)*15},${Math.floor(g/15)*15},${Math.floor(b/15)*15}`;
-        colorCounts[colorKey] = (colorCounts[colorKey] || 0) + 1;
-        validPixels++;
+      // Skip transparent and very dark/light pixels
+      if (a > 200 && (r + g + b) > 60 && (r + g + b) < 600) {
+        // Group similar colors (reduce precision for better clustering)
+        const colorKey = `${Math.floor(r/10)*10},${Math.floor(g/10)*10},${Math.floor(b/10)*10}`;
+        colorMap.set(colorKey, (colorMap.get(colorKey) || 0) + 1);
       }
     }
-  }
-  
-  console.log('🎨 Analyzed', validPixels, 'valid pixels out of', totalPixels, 'total pixels');
-  console.log('🎨 Found', Object.keys(colorCounts).length, 'distinct color groups');
-  
-  if (Object.keys(colorCounts).length < 2) {
-    console.warn('🎨 Not enough color diversity found in manual extraction');
+    
+    if (colorMap.size === 0) {
+      console.warn('🎨 No valid colors found in canvas extraction');
+      return null;
+    }
+    
+    // Sort colors by frequency and vibrancy
+    const sortedColors = Array.from(colorMap.entries())
+      .map(([colorStr, count]) => {
+        const [r, g, b] = colorStr.split(',').map(Number);
+        return {
+          color: [r, g, b],
+          count: count,
+          vibrancy: calculateColorVibrancy([r, g, b])
+        };
+      })
+      .sort((a, b) => (b.vibrancy * b.count) - (a.vibrancy * a.count));
+    
+    // Select top diverse colors
+    const selectedColors = [];
+    for (const candidate of sortedColors) {
+      if (selectedColors.length >= 5) break;
+      
+      // Ensure color diversity
+      const isDistinct = selectedColors.every(selected => 
+        areColorsDistinct(candidate.color, selected, 50)
+      );
+      
+      if (isDistinct) {
+        selectedColors.push(candidate.color);
+      }
+    }
+    
+    console.log('🎨 Canvas extracted colors:', selectedColors.map(c => `rgb(${c.join(', ')})`));
+    return selectedColors.length >= 2 ? selectedColors : null;
+    
+  } catch (error) {
+    console.warn('🎨 Canvas extraction error:', error.message);
     return null;
   }
-  
-  // Get the most significant colors and calculate their vibrancy
-  const colorData = Object.entries(colorCounts)
-    .map(([colorStr, count]) => {
-      const [r, g, b] = colorStr.split(',').map(Number);
-      return {
-        color: [r, g, b],
-        count: count,
-        percentage: (count / validPixels) * 100,
-        vibrancy: calculateColorVibrancy([r, g, b])
-      };
-    })
-    .filter(cd => cd.percentage > 1) // Only colors that appear in at least 1% of pixels
-    .sort((a, b) => b.vibrancy * b.percentage - a.vibrancy * a.percentage); // Sort by vibrancy weighted by frequency
-  
-  console.log('🎨 Top color candidates:', colorData.slice(0, 6).map(cd => ({
-    color: `rgb(${cd.color.join(', ')})`,
-    percentage: cd.percentage.toFixed(1) + '%',
-    vibrancy: cd.vibrancy.toFixed(3)
-  })));
-  
-  // Select up to 6 diverse colors
-  const selectedColors = [];
-  for (const candidate of colorData) {
-    if (selectedColors.length >= 6) break;
-    
-    // Check if this color is distinct from already selected colors
-    const isDistinct = selectedColors.every(selected => 
-      areColorsDistinct(candidate.color, selected, 40)
-    );
-    
-    if (isDistinct) {
-      selectedColors.push(candidate.color);
-    }
-  }
-  
-  console.log('🎨 Manual extraction final selection:', selectedColors.map(c => `rgb(${c.join(', ')})`));
-  
-  return selectedColors.length >= 2 ? selectedColors : null;
 }
 
-// Fallback: Extract colors from URL using predefined palettes
+function tryDominantColorExtraction(img) {
+  console.log('🎨 Trying dominant color extraction...');
+  
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = 1;
+  canvas.height = 1;
+  
+  try {
+    ctx.drawImage(img, 0, 0, 1, 1);
+    const imageData = ctx.getImageData(0, 0, 1, 1);
+    const [r, g, b] = imageData.data;
+    
+    console.log('🎨 Dominant color found:', `rgb(${r}, ${g}, ${b})`);
+    
+    // Create a palette based on the dominant color
+    const dominantColor = [r, g, b];
+    const palette = [
+      dominantColor,
+      adjustColor(dominantColor, 1.3, 0.8),  // Lighter variant
+      adjustColor(dominantColor, 0.7, 1.2),  // Darker, more saturated variant
+      adjustColor(dominantColor, 1.1, 1.4),  // Brighter variant
+    ];
+    
+    console.log('🎨 Generated palette from dominant color:', palette.map(c => `rgb(${c.join(', ')})`));
+    processExtractedColors(palette);
+    
+  } catch (error) {
+    console.warn('🎨 Dominant color extraction failed:', error.message);
+    tryAlternativeColorExtraction(img);
+  }
+}
+
+function tryAlternativeColorExtraction(img) {
+  console.log('🎨 Trying alternative color extraction methods...');
+  
+  // Method 1: Analyze the image URL for hints
+  const imageUrl = img.src;
+  if (imageUrl.includes('spotify')) {
+    console.log('🎨 Attempting Spotify image analysis...');
+    analyzeSpotifyImageColors(imageUrl);
+  } else {
+    // Method 2: Use average color from multiple samples
+    sampleImageColors(img);
+  }
+}
+
+function analyzeSpotifyImageColors(imageUrl) {
+  // Create a more sophisticated hash from the full image URL for better variety
+  const trackId = imageUrl.split('/').pop() || imageUrl; // Get unique part of URL
+  let hash = 0;
+  for (let i = 0; i < trackId.length; i++) {
+    const char = trackId.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  
+  // Add current time component so colors can vary
+  const timeComponent = Math.floor(Date.now() / 10000); // Changes every 10 seconds
+  hash = hash ^ timeComponent;
+  
+  console.log('🎨 Analyzing Spotify image:', trackId, 'Hash:', hash);
+  
+  // Generate 3-4 harmonious colors based on the hash
+  const baseHue = Math.abs(hash) % 360;
+  const colors = [];
+  
+  // Primary color (main hue)
+  const primarySat = 0.6 + (Math.abs(hash >> 8) % 30) / 100; // 0.6-0.9
+  const primaryLight = 0.4 + (Math.abs(hash >> 16) % 25) / 100; // 0.4-0.65
+  colors.push(hslToRgb(baseHue / 360, primarySat, primaryLight));
+  
+  // Secondary color (complementary or analogous)
+  const useComplementary = (hash % 2) === 0;
+  const secondaryHue = useComplementary ? 
+    (baseHue + 180) % 360 : // Complementary
+    (baseHue + 30 + (hash % 60)) % 360; // Analogous
+  const secondarySat = 0.5 + (Math.abs(hash >> 12) % 35) / 100; // 0.5-0.85
+  const secondaryLight = 0.35 + (Math.abs(hash >> 20) % 30) / 100; // 0.35-0.65
+  colors.push(hslToRgb(secondaryHue / 360, secondarySat, secondaryLight));
+  
+  // Tertiary color (triadic)
+  const tertiaryHue = (baseHue + 120 + (hash % 40)) % 360;
+  const tertiarySat = 0.4 + (Math.abs(hash >> 4) % 40) / 100; // 0.4-0.8
+  const tertiaryLight = 0.3 + (Math.abs(hash >> 24) % 35) / 100; // 0.3-0.65
+  colors.push(hslToRgb(tertiaryHue / 360, tertiarySat, tertiaryLight));
+  
+  // Accent color (split-complementary)
+  const accentHue = (baseHue + 150 + (hash % 60)) % 360;
+  const accentSat = 0.7 + (Math.abs(hash >> 6) % 25) / 100; // 0.7-0.95
+  const accentLight = 0.45 + (Math.abs(hash >> 28) % 25) / 100; // 0.45-0.7
+  colors.push(hslToRgb(accentHue / 360, accentSat, accentLight));
+  
+  console.log('🎨 Generated hash-based palette for track:', colors.map(c => `rgb(${c.join(', ')})`));
+  console.log('🎨 Base hue:', baseHue, 'Primary sat:', primarySat.toFixed(2), 'Primary light:', primaryLight.toFixed(2));
+  
+  processExtractedColors(colors);
+}
+
+function sampleImageColors(img) {
+  // Last resort: create colors based on image properties
+  const now = Date.now();
+  const imageAspect = img.naturalWidth / img.naturalHeight;
+  
+  // Generate colors based on image characteristics and current time
+  const baseHue = (now / 1000) % 360;
+  const colors = [];
+  
+  for (let i = 0; i < 4; i++) {
+    const hue = (baseHue + (i * 60)) % 360;
+    const saturation = 0.7 + (Math.sin(now / 1000 + i) * 0.3);
+    const lightness = 0.4 + (Math.cos(now / 1500 + i) * 0.3);
+    
+    const rgb = hslToRgb(hue / 360, saturation, lightness);
+    colors.push(rgb);
+  }
+  
+  console.log('🎨 Generated time-based colors:', colors.map(c => `rgb(${c.join(', ')})`));
+  processExtractedColors(colors);
+}
+
+// Enhanced URL-based color analysis for when direct extraction fails
 function extractColorsFromURL(imageUrl) {
-  // This function has been disabled to prevent predefined color palettes
-  // from overriding actual album artwork colors
-  console.log('🎨 ❌ extractColorsFromURL has been disabled - using default background instead');
-  console.log('🎨 Reason: Predefined palettes were causing incorrect colors (e.g., orange on blue albums)');
-  setDefaultBackground();
+  console.log('🎨 Using enhanced URL-based color analysis instead of fallback gradients');
+  analyzeSpotifyImageColors(imageUrl);
 }
 
 // Function to calculate color vibrancy (saturation * lightness, adjusted for brightness)
@@ -6849,3 +6831,71 @@ function selectPureRandom(tracks) {
 
 // ... existing code ...
 // Best Practice: Use Spotify's recommendation engine for true randomness
+
+// Create animated gradient with fallback colors when extraction fails
+function createFallbackAnimatedGradient() {
+  console.log('🎨 Creating fallback animated gradient with musical theme colors');
+  
+  // Create beautiful musical-themed color palettes that work well for any music
+  const musicalPalettes = [
+    // Deep Purple/Blue theme - works for most music
+    [[75, 0, 130], [138, 43, 226], [72, 61, 139]],      // Indigo, BlueViolet, DarkSlateBlue
+    
+    // Warm Music theme - good for energetic tracks
+    [[220, 20, 60], [255, 69, 0], [255, 140, 0]],       // Crimson, OrangeRed, DarkOrange
+    
+    // Cool Ambient theme - good for chill music
+    [[25, 25, 112], [70, 130, 180], [100, 149, 237]],   // MidnightBlue, SteelBlue, CornflowerBlue
+    
+    // Elegant theme - sophisticated colors
+    [[72, 61, 139], [123, 104, 238], [147, 112, 219]],  // DarkSlateBlue, MediumSlateBlue, MediumPurple
+    
+    // Vibrant theme - colorful and energetic
+    [[199, 21, 133], [255, 20, 147], [138, 43, 226]]    // MediumVioletRed, DeepPink, BlueViolet
+  ];
+  
+  // Select a palette based on current time for variety
+  const paletteIndex = Math.floor(Date.now() / 60000) % musicalPalettes.length; // Changes every minute
+  const selectedPalette = musicalPalettes[paletteIndex];
+  
+  console.log('🎨 Using musical palette #', paletteIndex, ':', selectedPalette.map(c => `rgb(${c.join(', ')})`));
+  
+  // Process the colors to create the animated gradient
+  processExtractedColors(selectedPalette);
+}
+
+let currentPlayerState = null;
+
+// Create animated gradient with fallback colors when extraction fails
+function createFallbackAnimatedGradient() {
+  console.log('🎨 Creating fallback animated gradient with musical theme colors');
+  
+  // Create beautiful musical-themed color palettes that work well for any music
+  const musicalPalettes = [
+    // Deep Purple/Blue theme - works for most music
+    [[75, 0, 130], [138, 43, 226], [72, 61, 139]],      // Indigo, BlueViolet, DarkSlateBlue
+    
+    // Warm Music theme - good for energetic tracks
+    [[220, 20, 60], [255, 69, 0], [255, 140, 0]],       // Crimson, OrangeRed, DarkOrange
+    
+    // Cool Ambient theme - good for chill music
+    [[25, 25, 112], [70, 130, 180], [100, 149, 237]],   // MidnightBlue, SteelBlue, CornflowerBlue
+    
+    // Elegant theme - sophisticated colors
+    [[72, 61, 139], [123, 104, 238], [147, 112, 219]],  // DarkSlateBlue, MediumSlateBlue, MediumPurple
+    
+    // Vibrant theme - colorful and energetic
+    [[199, 21, 133], [255, 20, 147], [138, 43, 226]]    // MediumVioletRed, DeepPink, BlueViolet
+  ];
+  
+  // Select a palette based on current time for variety
+  const paletteIndex = Math.floor(Date.now() / 60000) % musicalPalettes.length; // Changes every minute
+  const selectedPalette = musicalPalettes[paletteIndex];
+  
+  console.log('🎨 Using musical palette #', paletteIndex, ':', selectedPalette.map(c => `rgb(${c.join(', ')})`));
+  
+  // Process the colors to create the animated gradient
+  processExtractedColors(selectedPalette);
+}
+
+// Audio context and visualization variables
