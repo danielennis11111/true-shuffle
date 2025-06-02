@@ -926,13 +926,16 @@ async function fetchRecommendations() {
         // Fallback to regular algorithms
         switch(currentShuffleType) {
           case 'true-shuffle-all':
-          case 'true-random':
             console.log('📊 DEBUG: Fallback to fetchTrueShuffleAllSpotify');
             tracks = await fetchTrueShuffleAllSpotify();
             break;
           case 'true-shuffle-library':
-            console.log('📊 DEBUG: Fallback to fetchTrueShuffleMyLibrary');
-            tracks = await fetchTrueShuffleMyLibrary();
+            console.log('📊 DEBUG: Fallback to fetchTrueShuffleMyLibraryWithArtistExclusion');
+            tracks = await fetchTrueShuffleMyLibraryWithArtistExclusion();
+            break;
+          case 'true-random':
+            console.log('📊 DEBUG: Fallback to fetchTrulyRandomTracks');
+            tracks = await fetchTrulyRandomTracks();
             break;
         }
       }
@@ -941,11 +944,13 @@ async function fetchRecommendations() {
       // Use regular shuffle algorithms for other modes
       switch(currentShuffleType) {
         case 'true-shuffle-all':
-        case 'true-random':
           tracks = await fetchTrueShuffleAllSpotify();
           break;
         case 'true-shuffle-library':
           tracks = await fetchTrueShuffleMyLibrary();
+          break;
+        case 'true-random':
+          tracks = await fetchTrulyRandomTracks();
           break;
         default:
           console.warn(`⚠️ Unknown shuffle type: ${currentShuffleType}, falling back to true-shuffle-all`);
@@ -2649,6 +2654,11 @@ async function getAudioAnalysis(trackId) {
 // Update now playing display
 function updateNowPlaying(track) {
     console.log('🎵 Updating now playing UI for track:', track.name);
+    console.log('🔍 DOM Elements status:');
+    console.log('  - trackNameElement:', trackNameElement);
+    console.log('  - artistNameElement:', artistNameElement);
+    console.log('  - albumNameElement:', albumNameElement);
+    console.log('  - albumImageElement:', albumImageElement);
     
     // Set current track reference
     currentTrack = track;
@@ -2656,16 +2666,25 @@ function updateNowPlaying(track) {
     // Update track name and artist
     if (trackNameElement) {
         trackNameElement.textContent = track.name;
+        console.log('✅ Updated track name:', track.name);
+    } else {
+        console.error('❌ trackNameElement not found!');
     }
     
     if (artistNameElement) {
         const artistNames = track.artists.map(artist => artist.name).join(', ');
         artistNameElement.textContent = artistNames;
+        console.log('✅ Updated artist name:', artistNames);
+    } else {
+        console.error('❌ artistNameElement not found!');
     }
     
     // Update album name
     if (albumNameElement && track.album) {
         albumNameElement.textContent = track.album.name;
+        console.log('✅ Updated album name:', track.album.name);
+    } else {
+        console.error('❌ albumNameElement not found or no album data!');
     }
     
     // Update album art (the album cover, not the vinyl disc)
@@ -2684,9 +2703,12 @@ function updateNowPlaying(track) {
         // Update background color based on album art
         updateBackgroundColor(albumImageElement);
         
-        console.log('✅ Updated album art');
+        console.log('✅ Updated album art:', imageUrl);
     } else {
-        console.warn('⚠️ No album art available for track');
+        console.warn('⚠️ No album art available for track or albumImageElement not found');
+        console.log('  - albumImageElement:', albumImageElement);
+        console.log('  - track.album:', track.album);
+        console.log('  - track.album.images:', track.album?.images);
     }
     
     // Update track info in sidebar (if it exists)
@@ -2747,7 +2769,7 @@ async function extractColorsWithProxy(img) {
   console.log('🎨 Attempting color extraction with proxy method...');
   
   try {
-    // Create a new image element that loads through our own domain to avoid CORS
+    // Create a new image element that loads through our proxy to avoid CORS
     const proxyImg = new Image();
     proxyImg.crossOrigin = 'anonymous';
     
@@ -2770,8 +2792,9 @@ async function extractColorsWithProxy(img) {
       tryAlternativeColorExtraction(img);
     };
     
-    // Load the image through a proxy or use the original if same-origin
-    proxyImg.src = img.src;
+    // Use our image proxy endpoint to load the image with proper CORS headers
+    const imageUrl = encodeURIComponent(img.src);
+    proxyImg.src = `/api/image-proxy?url=${imageUrl}`;
     
   } catch (error) {
     console.warn('🎨 ❌ Proxy extraction failed:', error.message);
@@ -7138,4 +7161,4 @@ function createFallbackAnimatedGradient() {
   processExtractedColors(selectedPalette);
 }
 
-// Audio context and visualization variables
+// Audio context and visualization variables 

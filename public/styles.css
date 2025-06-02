@@ -740,6 +740,7 @@ body {
 .vinyl-record {
     display: inline-block;
     position: relative;
+    margin-top: 6px;
 }
 
 .record-disc {

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Loading Test</title>
+</head>
+<body>
+    <h1>Spotify Image Loading Test</h1>
+    
+    <h2>Direct Image Loading</h2>
+    <img id="direct-image" crossorigin="anonymous" style="max-width: 300px;" />
+    
+    <h2>Canvas Test</h2>
+    <canvas id="test-canvas" width="100" height="100" style="border: 1px solid black;"></canvas>
+    
+    <h2>Console Output</h2>
+    <div id="console-output" style="background: #f0f0f0; padding: 10px; font-family: monospace;"></div>
+    
+    <script>
+        const log = (message) => {
+            console.log(message);
+            document.getElementById('console-output').innerHTML += message + '<br>';
+        };
+        
+        // Test direct image loading
+        const directImg = document.getElementById('direct-image');
+        directImg.onload = () => log('✅ Direct image loaded successfully');
+        directImg.onerror = () => log('❌ Direct image loading failed');
+        directImg.src = 'https://i.scdn.co/image/ab67616d0000b273e319baafd16e84f0408af2a0';
+        
+        // Test canvas color extraction
+        directImg.onload = function() {
+            try {
+                const canvas = document.getElementById('test-canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(directImg, 0, 0, 100, 100);
+                
+                const imageData = ctx.getImageData(0, 0, 1, 1);
+                const [r, g, b] = imageData.data;
+                log(`✅ Canvas extraction successful: rgb(${r}, ${g}, ${b})`);
+                
+                canvas.style.background = `rgb(${r}, ${g}, ${b})`;
+            } catch (error) {
+                log(`❌ Canvas extraction failed: ${error.message}`);
+            }
+        };
+    </script>
+</body>
+</html> 

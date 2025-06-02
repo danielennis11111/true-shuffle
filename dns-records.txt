@@ -1,0 +1,22 @@
+DNS RECORDS FOR IONOS - trueshuffleradio.com
+=====================================================
+
+ADD THESE RECORDS TO YOUR IONOS DNS SETTINGS:
+
+A RECORDS (for root domain):
+Type: A, Name: @, Value: 216.239.32.21, TTL: 3600
+Type: A, Name: @, Value: 216.239.34.21, TTL: 3600  
+Type: A, Name: @, Value: 216.239.36.21, TTL: 3600
+Type: A, Name: @, Value: 216.239.38.21, TTL: 3600
+
+CNAME RECORD (for www subdomain):
+Type: CNAME, Name: www, Value: ghs.googlehosted.com, TTL: 3600
+
+NEXT STEPS:
+1. Add these records in Ionos DNS management
+2. Wait 5-30 minutes for DNS propagation
+3. Test: https://trueshuffleradio.com
+4. Update Spotify redirect URI to: https://trueshuffleradio.com/callback
+
+CURRENT WORKING URL:
+https://true-shuffle-radio-981361502634.us-central1.run.app 
